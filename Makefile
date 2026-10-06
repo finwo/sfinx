@@ -1,4 +1,4 @@
-TARGET:=linux-glibc-$(shell uname -m)
+TARGET:=$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m)
 
 BIN:=sfinx
 
