@@ -16,6 +16,7 @@
   - `mask`: a node's depth in bits.
   - `layer`: subtree index, `= mask / 8`.
   - `org`: what the bottom WOTS signs, `= H(path | message)`, so the same message on a different path signs a different value.
+  - `E4M4`: the log-ish length byte, 4-bit exponent then 4-bit mantissa. Exponent `0` is the mantissa (0..15); for exponent `E >= 1` the value is `(16 + mantissa) << (E-1)`, so `0x10` is 16, `0x20` is 32, `0x30` is 64, and each exponent step doubles.
 
 - Tree:
   - Binary, built as `N` stacked subtrees of height `b = 8`.
@@ -45,7 +46,7 @@
   - Pubkey: `H(chain_end[0] | ... | chain_end[c-1])`, chain end = pre-image hashed `w = 256` times.
 
 - Signing:
-  - Output the path length, E4M4 encoded (`0x00` = 0, `0x10` = 16, `0x20` = 32, `0x30` = 64, `0x40` = 128).
+  - Output the path length, E4M4 encoded (`0x00..0x0F` = 0..15, `0x10..0x1F` = 16..31, `0x20..0x2F` = 32..62, `0x30..0x3F` = 64..124, and so on).
   - `N = 0`: output the single WOTS proof for `org`. No path, no subtrees.
   - `N >= 1`: output the random path, then walk bottom up. At each subtree, output the WOTS proof for the path key, then the `b = 8` Merkle neighbours in verification order: LSB (deepest) first, up to MSB (subtree root) last.
 
