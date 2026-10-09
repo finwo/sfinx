@@ -265,7 +265,7 @@ static inline void _sfinx_subtree_verify(sfinx_hash hash, const uint8_t *prefix,
 sfinx_status sfinx_single_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, uint8_t *pubkey_out,
                                      size_t pubkey_cap, size_t *pubkey_len_out) {
   size_t len = sfinx_hash_len(hash);
-  if (len == 0 || seed_len > SFINX_SEED_LEN_MAX) {
+  if (len == 0 || !seed || seed_len > SFINX_SEED_LEN_MAX) {
     return SFINX_ERR_ARGS;
   }
   if (!pubkey_out || pubkey_cap < len) {
@@ -283,7 +283,7 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
   size_t  len  = sfinx_hash_len(hash);
   size_t  need = sfinx_signature_len(hash, 0);
   uint8_t org[SFINX_HASH_LEN_MAX];
-  if (len == 0 || seed_len > SFINX_SEED_LEN_MAX) {
+  if (len == 0 || !seed || !msg || seed_len > SFINX_SEED_LEN_MAX) {
     return SFINX_ERR_ARGS;
   }
   if (!sig || sig_cap < need) {
@@ -304,7 +304,7 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
 sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, uint8_t *pubkey_out,
                                    size_t pubkey_cap, size_t *pubkey_len_out) {
   size_t len = sfinx_hash_len(hash);
-  if (len == 0 || seed_len > SFINX_SEED_LEN_MAX) {
+  if (len == 0 || !seed || seed_len > SFINX_SEED_LEN_MAX) {
     return SFINX_ERR_ARGS;
   }
   if (!pubkey_out || pubkey_cap < len) {
@@ -333,7 +333,8 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
   uint8_t *joined;
   size_t   at;
 
-  if (len == 0 || seed_len > SFINX_SEED_LEN_MAX || !path || path_len == 0 || !sfinx_path_len_valid(path_len)) {
+  if (len == 0 || !seed || !msg || seed_len > SFINX_SEED_LEN_MAX || !path || path_len == 0 ||
+      !sfinx_path_len_valid(path_len)) {
     return SFINX_ERR_ARGS;
   }
   if (!sig || sig_cap < need) {
@@ -408,7 +409,7 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   const uint8_t *path;
   uint8_t       *joined;
 
-  if (!pubkey || !sig || sig_len < 2) {
+  if (!pubkey || !msg || !sig || sig_len < 2) {
     return SFINX_ERR_ARGS;
   }
   path_len = _sfinx_e4m4_decode(sig[0]);
@@ -519,6 +520,9 @@ sfinx_status sfinx_signature_info(const uint8_t *sig, size_t sig_len, sfinx_hash
 }
 
 sfinx_status sfinx_random_bytes(uint8_t *out, size_t len) {
+  if (!out) {
+    return SFINX_ERR_ARGS;
+  }
   while (len > 0) {
     size_t chunk = len > 256 ? 256 : len;
     if (getentropy(out, chunk) != 0) {

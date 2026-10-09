@@ -1,17 +1,17 @@
-#include "src/sfinx.c"
-#include "_tap.c"
-
 #include <string.h>
+
+#include "_tap.c"
+#include "src/sfinx.c"
 
 static void check_size(size_t got, size_t want, const char *what) {
   tap(got == want, what, "got %zu, want %zu", got, want);
 }
 
 int main(void) {
-  uint8_t    sig[3]    = {0x01, 0xaa, 0x20};
-  uint8_t    bad[3]    = {0x41, 0xaa, 0x20};
-  sfinx_hash hash      = SFINX_HASH_224;
-  size_t     path_len  = 99;
+  uint8_t    sig[3]   = {0x01, 0xaa, 0x20};
+  uint8_t    bad[3]   = {0x41, 0xaa, 0x20};
+  sfinx_hash hash     = SFINX_HASH_224;
+  size_t     path_len = 99;
 
   tap_begin("sfinx api");
 
@@ -36,7 +36,29 @@ int main(void) {
   check_size(path_len, 1, "signature_info path_len");
   tap(hash == SFINX_HASH_256, "signature_info hash", "got %d", (int)hash);
   tap(sfinx_signature_info(sig, sizeof(sig), NULL, NULL) == SFINX_OK, "signature_info accepts NULL outs", "failed");
-  tap(sfinx_signature_info(bad, sizeof(bad), NULL, NULL) == SFINX_ERR_FORMAT, "signature_info rejects bad N", "accepted");
+  tap(sfinx_signature_info(bad, sizeof(bad), NULL, NULL) == SFINX_ERR_FORMAT, "signature_info rejects bad N",
+      "accepted");
+
+  uint8_t buf[64];
+  tap(sfinx_signature_info(NULL, sizeof(sig), NULL, NULL) == SFINX_ERR_ARGS, "signature_info rejects NULL sig",
+      "accepted");
+  tap(sfinx_single_public_key(SFINX_HASH_256, NULL, 4, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
+      "single_public_key rejects NULL seed", "accepted");
+  tap(sfinx_single_public_key(SFINX_HASH_256, (const uint8_t *)"seed", 4, NULL, sizeof(buf), NULL) == SFINX_ERR_NOSPACE,
+      "single_public_key rejects NULL out", "accepted");
+  tap(sfinx_single_sign(SFINX_HASH_256, NULL, 4, (const uint8_t *)"m", 1, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
+      "single_sign rejects NULL seed", "accepted");
+  tap(sfinx_single_sign(SFINX_HASH_256, (const uint8_t *)"seed", 4, NULL, 1, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
+      "single_sign rejects NULL msg", "accepted");
+  tap(sfinx_tree_public_key(SFINX_HASH_256, NULL, 4, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
+      "tree_public_key rejects NULL seed", "accepted");
+  tap(sfinx_tree_sign(SFINX_HASH_256, NULL, 4, (const uint8_t *)"\x20", 1, (const uint8_t *)"m", 1, buf, sizeof(buf),
+                      NULL) == SFINX_ERR_ARGS,
+      "tree_sign rejects NULL seed", "accepted");
+  tap(sfinx_verify(NULL, 32, (const uint8_t *)"m", 1, sig, sizeof(sig)) == SFINX_ERR_ARGS, "verify rejects NULL pubkey",
+      "accepted");
+  tap(sfinx_verify(buf, 32, NULL, 1, sig, sizeof(sig)) == SFINX_ERR_ARGS, "verify rejects NULL msg", "accepted");
+  tap(sfinx_random_bytes(NULL, 4) == SFINX_ERR_ARGS, "random_bytes rejects NULL out", "accepted");
 
   return tap_plan();
 }
