@@ -6,6 +6,7 @@ OUT := ../build/test
 SRCS := $(filter-out _tap.c,$(wildcard *.c))
 TESTS := $(patsubst %.c,%,$(SRCS))
 BINS := $(addprefix $(OUT)/,$(TESTS))
+SH := $(filter-out _tap.sh,$(wildcard *.sh))
 
 KECCAK := ../lib/coruus/keccak-tiny/keccak-tiny.c
 
@@ -27,6 +28,10 @@ run: all
 	for t in $(BINS); do \
 		echo "# $$t"; \
 		$$t || rc=1; \
+	done; \
+	for t in $(SH); do \
+		echo "# test/$$t"; \
+		sh $$t || rc=1; \
 	done; \
 	exit $$rc
 
