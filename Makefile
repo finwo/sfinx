@@ -29,6 +29,10 @@ targets:
 clean:
 	rm -rf build
 
+.PHONY: test
+test:
+	@$(MAKE) --no-print-directory --directory test run
+
 # Never let the catch-all try to rebuild the makefiles themselves
 Makefile: ;
 
