@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "sfinx.h"
 #include "util/file.h"
 
 int cli_read_message(const char *message, const char *file, uint8_t **out, size_t *len_out) {
@@ -18,6 +19,36 @@ int cli_read_message(const char *message, const char *file, uint8_t **out, size_
     return 0;
   }
   return util_file_read(file, out, len_out);
+}
+
+int cli_seed_length(const char *text, size_t *len_out) {
+  char         *end = NULL;
+  unsigned long v;
+  if (!text) {
+    *len_out = CLI_SEED_LEN_DEFAULT;
+    return 0;
+  }
+  v = strtoul(text, &end, 10);
+  if (!end || *end != '\0' || v == 0 || v > SFINX_SEED_LEN_MAX) {
+    return -1;
+  }
+  *len_out = (size_t)v;
+  return 0;
+}
+
+sfinx_status cli_seed_random(size_t len, uint8_t **out) {
+  uint8_t     *seed = malloc(len);
+  sfinx_status status;
+  if (!seed) {
+    return SFINX_ERR_NOSPACE;
+  }
+  status = sfinx_random_bytes(seed, len);
+  if (status != SFINX_OK) {
+    free(seed);
+    return status;
+  }
+  *out = seed;
+  return SFINX_OK;
 }
 
 static int hexval(int c) {

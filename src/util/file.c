@@ -74,3 +74,8 @@ int util_file_write(const char *path, const uint8_t *data, size_t len, unsigned 
   close(fd);
   return rc;
 }
+
+int util_file_exists(const char *path) {
+  if (!path || strcmp(path, "-") == 0) return 0;
+  return access(path, F_OK) == 0;
+}

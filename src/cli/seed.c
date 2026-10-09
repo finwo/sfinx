@@ -2,16 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common.h"
 #include "registry.h"
 #include "sfinx.h"
 #include "util/file.h"
 
 static int cmd_seed(int argc, const char **argv) {
-  const char *out_file = NULL;
-  int         force    = 0;
-  size_t      length   = 32;
-  uint8_t    *seed;
-  int         rc = 0;
+  const char  *out_file = NULL;
+  int          force    = 0;
+  size_t       length   = CLI_SEED_LEN_DEFAULT;
+  uint8_t     *seed     = NULL;
+  sfinx_status status;
+  int          rc = 0;
 
   static const char *const usages[] = {
       "sfinx seed [length] [-o file]",
@@ -32,24 +34,14 @@ static int cmd_seed(int argc, const char **argv) {
     fprintf(stderr, "sfinx: seed: too many arguments\n");
     return 1;
   }
-  if (argc == 1) {
-    char         *end = NULL;
-    unsigned long v   = strtoul(argv[0], &end, 10);
-    if (!end || *end != '\0' || v == 0 || v > SFINX_SEED_LEN_MAX) {
-      fprintf(stderr, "sfinx: seed: invalid length: %s\n", argv[0]);
-      return 1;
-    }
-    length = (size_t)v;
-  }
-
-  seed = malloc(length);
-  if (!seed) {
-    fprintf(stderr, "sfinx: seed: out of memory\n");
+  if (cli_seed_length(argc == 1 ? argv[0] : NULL, &length) != 0) {
+    fprintf(stderr, "sfinx: seed: invalid length: %s\n", argv[0]);
     return 1;
   }
-  if (sfinx_random_bytes(seed, length) != SFINX_OK) {
-    fprintf(stderr, "sfinx: seed: %s\n", sfinx_strerror(SFINX_ERR_RANDOM));
-    free(seed);
+
+  status = cli_seed_random(length, &seed);
+  if (status != SFINX_OK) {
+    fprintf(stderr, "sfinx: seed: %s\n", sfinx_strerror(status));
     return 1;
   }
 

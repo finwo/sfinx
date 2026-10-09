@@ -193,6 +193,7 @@ a universal keyspace.
 `sfinx` is one binary that dispatches on its first argument.
 
 - `sfinx seed [length] [-o file]`: write `length` random seed bytes, default 32, to stdout or a file.
+- `sfinx generate [length] [-L hash] [--out-fmt fmt] [-o file] [-F]`: generate a seed and derive its public key. `--out-fmt hdr` writes one combined file, `raw` and `hex` write a seed file and a `.pub` file beside it. Stdout carries the seed alone.
 - `sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]`: read a key file, derive the public key from the seed, and re-encode it. `--in-fmt` defaults to auto-detect, `--out-fmt` to `hdr`. `--public-only` drops the seed.
 - `sfinx sign -k keyfile [-L hash] [-p path-len | -P path] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt] [-o file] [-F]`: sign a message and write the signature. `--key-fmt` defaults to auto-detect with a `raw` seed fallback, `--sig-fmt` to `hex` on stdout and `raw` to a file.
 - `sfinx verify -k keyfile [-L bits] [-s signature | -S signature-file] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt]`: verify a signature and print `OK` or `FAIL`. `--key-fmt` defaults to auto-detect with a `rawpub` fallback, `--sig-fmt` to auto-detect with a `raw` fallback.

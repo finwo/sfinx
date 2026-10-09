@@ -15,6 +15,8 @@ tap "${ok}" "--help shows usage" "${out}"
 out=$("${BIN}" help 2>&1 || true)
 case "${out}" in *seed*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "help lists seed" "${out}"
+case "${out}" in *generate*) ok=1 ;; *) ok=0 ;; esac
+tap "${ok}" "help lists generate" "${out}"
 case "${out}" in *printkey*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "help lists printkey" "${out}"
 case "${out}" in *sign*) ok=1 ;; *) ok=0 ;; esac
