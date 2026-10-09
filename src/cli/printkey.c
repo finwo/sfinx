@@ -23,14 +23,14 @@ static int cmd_printkey(int argc, const char **argv) {
   int          rc = 0;
 
   static const char *const usages[] = {
-      "sfinx printkey -k file [-L hash] [-f format] [--in format] [-o file] [--public-only]",
+      "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]",
       NULL,
   };
   struct argparse_option options[] = {
       OPT_HELP(),
       OPT_STRING('k', "key-file", &key_file, "key file to read", NULL, 0, 0),
-      OPT_STRING('f', "format", &format, "output format (default hdr)", NULL, 0, 0),
-      OPT_STRING(0, "in", &in_format, "input format (default auto)", NULL, 0, 0),
+      OPT_STRING(0, "out-fmt", &format, "output format (default hdr)", NULL, 0, 0),
+      OPT_STRING(0, "in-fmt", &in_format, "input format (default auto)", NULL, 0, 0),
       OPT_INTEGER('L', "hash", &hash, "hash size (224/256/384/512)", NULL, 0, 0),
       OPT_STRING('o', "out", &out_file, "write to a file instead of stdout", NULL, 0, 0),
       OPT_BOOLEAN(0, "public-only", &public_only, "output only the public key", NULL, 0, 0),
@@ -119,7 +119,7 @@ static struct cli_command printkey_command = {
     .names       = (const char *const[]){"printkey", NULL},
     .display     = "printkey",
     .description = "Print or convert a key file",
-    .help        = "sfinx printkey -k file [-L hash] [-f format] [--in format] [-o file] [--public-only]",
+    .help        = "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]",
     .fn          = cmd_printkey,
 };
 

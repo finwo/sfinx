@@ -100,16 +100,23 @@ sfinx_status sfinx_key_derive(sfinx_key *key);
 
 // Formats {{{
 //
-// Pluggable key encodings, registered by constructors and detected by content
+// Pluggable key and signature encodings, registered by constructors
 //   decode with a NULL name auto-detects, encode_len sizes before encode
+//   signature auto-detect falls back to raw when nothing matches
 
 typedef struct sfinx_format {
   struct sfinx_format *next;
   const char          *name;
-  int (*detect)(const uint8_t *data, size_t len);
-  sfinx_status (*decode)(const uint8_t *data, size_t len, sfinx_key *out);
-  size_t (*encode_len)(const sfinx_key *key);
-  sfinx_status (*encode)(const sfinx_key *key, uint8_t *out, size_t cap, size_t *len_out);
+
+  int (*key_detect)(const uint8_t *data, size_t len);
+  sfinx_status (*key_decode)(const uint8_t *data, size_t len, sfinx_key *out);
+  size_t (*key_encode_len)(const sfinx_key *key);
+  sfinx_status (*key_encode)(const sfinx_key *key, uint8_t *out, size_t cap, size_t *len_out);
+
+  int (*sig_detect)(const uint8_t *data, size_t len);
+  sfinx_status (*sig_decode)(const uint8_t *data, size_t len, uint8_t *out, size_t cap, size_t *len_out);
+  size_t (*sig_encode_len)(const uint8_t *sig, size_t sig_len);
+  sfinx_status (*sig_encode)(const uint8_t *sig, size_t sig_len, uint8_t *out, size_t cap, size_t *len_out);
 } sfinx_format;
 
 void                sfinx_format_register(sfinx_format *format);
@@ -118,6 +125,12 @@ const sfinx_format *sfinx_format_find(const char *name);
 sfinx_status sfinx_key_decode(const uint8_t *data, size_t len, const char *format, sfinx_key *out);
 size_t       sfinx_key_encode_len(const sfinx_key *key, const char *format);
 sfinx_status sfinx_key_encode(const sfinx_key *key, const char *format, uint8_t *out, size_t cap, size_t *len_out);
+
+sfinx_status sfinx_sig_decode(const uint8_t *data, size_t len, const char *format, uint8_t *out, size_t cap,
+                              size_t *len_out);
+size_t       sfinx_sig_encode_len(const uint8_t *sig, size_t sig_len, const char *format);
+sfinx_status sfinx_sig_encode(const uint8_t *sig, size_t sig_len, const char *format, uint8_t *out, size_t cap,
+                              size_t *len_out);
 // }}}
 
 #endif  // __SFINX_H__

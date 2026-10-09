@@ -17,6 +17,10 @@ case "${out}" in *seed*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "help lists seed" "${out}"
 case "${out}" in *printkey*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "help lists printkey" "${out}"
+case "${out}" in *sign*) ok=1 ;; *) ok=0 ;; esac
+tap "${ok}" "help lists sign" "${out}"
+case "${out}" in *verify*) ok=1 ;; *) ok=0 ;; esac
+tap "${ok}" "help lists verify" "${out}"
 
 out=$("${BIN}" --version 2>&1 || true)
 tap "$([ -n "${out}" ] && echo 1 || echo 0)" "--version prints" "empty"

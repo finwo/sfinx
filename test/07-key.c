@@ -14,6 +14,7 @@ int main(void) {
   sfinx_key            key;
   sfinx_key            other;
   sfinx_key            badkey;
+  sfinx_key            pubkey;
   sfinx_status         status;
 
   tap_begin("sfinx key");
@@ -57,6 +58,26 @@ int main(void) {
   tap(status == SFINX_ERR_FORMAT, "decode rejects an unknown format", "got %s", sfinx_strerror(status));
   status = sfinx_key_decode(badhdr, sizeof(badhdr) - 1, NULL, &badkey);
   tap(status == SFINX_ERR_FORMAT, "decode rejects bad hex", "got %s", sfinx_strerror(status));
+
+  sfinx_key_init(&pubkey);
+  need = sfinx_key_encode_len(&key, "rawpub");
+  tap(need == key.pub_len, "rawpub encode_len", "got %zu", need);
+  status = sfinx_key_encode(&key, "rawpub", hdr, sizeof(hdr), &hdr_len);
+  tap(status == SFINX_OK, "rawpub encode", "%s", sfinx_strerror(status));
+  status = sfinx_key_decode(hdr, hdr_len, "rawpub", &pubkey);
+  tap(status == SFINX_OK && pubkey.pub_len == key.pub_len && memcmp(pubkey.pub, key.pub, key.pub_len) == 0,
+      "rawpub round trip", "mismatch");
+  sfinx_key_free(&pubkey);
+
+  sfinx_key_init(&pubkey);
+  need = sfinx_key_encode_len(&key, "hexpub");
+  tap(need == key.pub_len * 2, "hexpub encode_len", "got %zu", need);
+  status = sfinx_key_encode(&key, "hexpub", hdr, sizeof(hdr), &hdr_len);
+  tap(status == SFINX_OK, "hexpub encode", "%s", sfinx_strerror(status));
+  status = sfinx_key_decode(hdr, hdr_len, "hexpub", &pubkey);
+  tap(status == SFINX_OK && pubkey.pub_len == key.pub_len && memcmp(pubkey.pub, key.pub, key.pub_len) == 0,
+      "hexpub round trip", "mismatch");
+  sfinx_key_free(&pubkey);
 
   sfinx_key_free(&key);
   sfinx_key_free(&other);

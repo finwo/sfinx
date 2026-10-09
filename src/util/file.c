@@ -2,61 +2,75 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/stat.h>
+#include <string.h>
 #include <unistd.h>
 
-int util_file_read(const char *path, uint8_t **out, size_t *len_out) {
-  struct stat st;
-  uint8_t    *buf;
-  size_t      len;
-  size_t      got = 0;
-  int         fd;
-
-  if (!path || !out || !len_out) return -1;
-  fd = open(path, O_RDONLY);
-  if (fd < 0) return -1;
-  if (fstat(fd, &st) != 0) {
-    close(fd);
-    return -1;
-  }
-  len = (size_t)st.st_size;
-  buf = malloc(len + 1);
-  if (!buf) {
-    close(fd);
-    return -1;
-  }
-  while (got < len) {
-    ssize_t n = read(fd, buf + got, len - got);
-    if (n <= 0) {
+static int read_fd(int fd, uint8_t **out, size_t *len_out) {
+  size_t   cap = 65536;
+  size_t   len = 0;
+  uint8_t *buf = malloc(cap + 1);
+  if (!buf) return -1;
+  for (;;) {
+    if (len == cap) {
+      size_t   ncap = cap * 2;
+      uint8_t *nbuf = realloc(buf, ncap + 1);
+      if (!nbuf) {
+        free(buf);
+        return -1;
+      }
+      buf = nbuf;
+      cap = ncap;
+    }
+    ssize_t n = read(fd, buf + len, cap - len);
+    if (n < 0) {
       free(buf);
-      close(fd);
       return -1;
     }
-    got += (size_t)n;
+    if (n == 0) break;
+    len += (size_t)n;
   }
-  close(fd);
   buf[len] = 0;
   *out     = buf;
   *len_out = len;
   return 0;
 }
 
-int util_file_write(const char *path, const uint8_t *data, size_t len, unsigned mode, int force) {
+static int write_fd(int fd, const uint8_t *data, size_t len) {
   size_t put = 0;
-  int    fd;
-  int    flags = O_WRONLY | O_CREAT | O_TRUNC;
+  while (put < len) {
+    ssize_t n = write(fd, data + put, len - put);
+    if (n <= 0) return -1;
+    put += (size_t)n;
+  }
+  return 0;
+}
 
-  if (!path || (!data && len)) return -1;
+int util_file_read(const char *path, uint8_t **out, size_t *len_out) {
+  int fd;
+  int rc;
+  if (!out || !len_out) return -1;
+  if (!path || strcmp(path, "-") == 0) {
+    return read_fd(STDIN_FILENO, out, len_out);
+  }
+  fd = open(path, O_RDONLY);
+  if (fd < 0) return -1;
+  rc = read_fd(fd, out, len_out);
+  close(fd);
+  return rc;
+}
+
+int util_file_write(const char *path, const uint8_t *data, size_t len, unsigned mode, int force) {
+  int fd;
+  int rc;
+  int flags = O_WRONLY | O_CREAT | O_TRUNC;
+  if (!data && len) return -1;
+  if (!path || strcmp(path, "-") == 0) {
+    return write_fd(STDOUT_FILENO, data, len);
+  }
   if (!force) flags |= O_EXCL;
   fd = open(path, flags, mode);
   if (fd < 0) return -1;
-  while (put < len) {
-    ssize_t n = write(fd, data + put, len - put);
-    if (n <= 0) {
-      close(fd);
-      return -1;
-    }
-    put += (size_t)n;
-  }
-  return close(fd);
+  rc = write_fd(fd, data, len);
+  close(fd);
+  return rc;
 }

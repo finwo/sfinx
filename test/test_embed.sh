@@ -90,10 +90,14 @@ int main(void) {
   uint8_t              sig[4096];
   uint8_t              tamper[4096];
   uint8_t              hdr[4096];
-  size_t               pub_len = 0;
-  size_t               sig_len = 0;
-  size_t               hdr_len = 0;
-  size_t               msg_len = sizeof(msg) - 1;
+  uint8_t              sigtext[8192];
+  uint8_t              sigback[4096];
+  size_t               pub_len     = 0;
+  size_t               sig_len     = 0;
+  size_t               hdr_len     = 0;
+  size_t               sigtext_len = 0;
+  size_t               sigback_len = 0;
+  size_t               msg_len     = sizeof(msg) - 1;
   sfinx_key            key;
   sfinx_key            reread;
   sfinx_status         status;
@@ -137,6 +141,19 @@ int main(void) {
   }
   if (reread.pub_len != pub_len || memcmp(reread.pub, pub, pub_len) != 0) {
     return fail("hdr pub mismatch");
+  }
+  sigtext_len = sfinx_sig_encode_len(sig, sig_len, "hdr");
+  if (sigtext_len == 0 || sigtext_len > sizeof(sigtext)) {
+    return fail("sig encode_len");
+  }
+  if (sfinx_sig_encode(sig, sig_len, "hdr", sigtext, sizeof(sigtext), &sigtext_len) != SFINX_OK) {
+    return fail("sig encode hdr");
+  }
+  if (sfinx_sig_decode(sigtext, sigtext_len, NULL, sigback, sizeof(sigback), &sigback_len) != SFINX_OK) {
+    return fail("sig decode auto");
+  }
+  if (sigback_len != sig_len || memcmp(sigback, sig, sig_len) != 0) {
+    return fail("sig round trip");
   }
   sfinx_key_free(&key);
   sfinx_key_free(&reread);

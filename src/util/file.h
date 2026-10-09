@@ -6,7 +6,7 @@
 
 // File {{{
 //
-// Whole-file IO for the CLI
+// Whole-file IO for the CLI, "-" or NULL means stdin or stdout
 //   read mallocs len + 1 and NUL terminates, write sets the mode and O_EXCL
 
 int util_file_read(const char *path, uint8_t **out, size_t *len_out);
