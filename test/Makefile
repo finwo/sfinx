@@ -20,6 +20,9 @@ $(OUT):
 $(KECCAK):
 	@cd .. && dep install
 
+$(OUT)/09-ref: 09-ref.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(KECCAK) | $(OUT)
+	@$(CC) $(CFLAGS) $< $(LIB) $(KECCAK) -o $@
+
 $(OUT)/%: %.c ../src/sfinx.c _tap.c $(LIB) $(KECCAK) | $(OUT)
 	@$(CC) $(CFLAGS) $< $(LIB) $(KECCAK) -o $@
 
