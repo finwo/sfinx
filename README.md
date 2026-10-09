@@ -188,6 +188,16 @@ sfinx is stateless. There is no counter and no state file. A signature is a
 proof that you can produce the path to a given root, and the virtual tree gives
 a universal keyspace.
 
+## Command line
+
+`sfinx` is one binary that dispatches on its first argument.
+
+- `sfinx seed [length] [-o file]`: write `length` random seed bytes, default 32, to stdout or a file.
+- `sfinx printkey -k file [-L hash] [-f format] [--in format] [-o file] [--public-only]`: read a key file, derive the public key from the seed, and re-encode it. `--public-only` drops the seed.
+- `sfinx help` and `sfinx version`.
+
+A key file carries a seed, a public key, or both. `hdr` is the text form (`hash:`, `seed:`, `public-key:`), `raw` is a bare seed. The encode and decode code lives in the library, so any program using sfinx reads and writes the same files.
+
 ## Pseudocode
 
 A sketch, not reference code.

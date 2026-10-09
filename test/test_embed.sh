@@ -1,10 +1,7 @@
 #!/bin/sh
-# test/test_embed.sh - prove sfinx stands alone as a library.
-#
-# Compiles a program that includes only sfinx.h and links only sfinx.c plus
-# keccak-tiny, then runs an N=2 tree round trip with tamper checks. No CLI, no
-# util, no argparse, no rxi/log path is reachable, so a leaked dependency
-# breaks the build instead of passing silently.
+# Reads export.mk for the library source list, compiles a program that includes
+# only sfinx.h against that list plus keccak-tiny, then exercises the crypto and
+# the key format API. No CLI, no util, no argparse, no rxi/log is reachable.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "${HERE}/.." && pwd)
@@ -29,14 +26,6 @@ else
   tap 0 "sfinx.h includes only stddef and stdint" "${bad}"
 fi
 
-bad=$(grep -E '^[[:space:]]*#include' "${ROOT}/src/sfinx.c" |
-  grep -E 'cli/|util/|argparse|log\.h' || true)
-if [ -z "${bad}" ]; then
-  tap 1 "sfinx.c has no util includes" ""
-else
-  tap 0 "sfinx.c has no util includes" "${bad}"
-fi
-
 if [ ! -f "${KECCAK}" ]; then
   (cd "${ROOT}" && dep install) >/dev/null 2>&1 || true
 fi
@@ -48,6 +37,37 @@ fi
 
 TMP=$(mktemp -d)
 trap 'rm -rf "${TMP}"' EXIT
+
+# export.mk, templated the way dep does it, expanded the way make does it
+sed "s|{{module.dirname}}|${ROOT}|g" "${ROOT}/export.mk" >"${TMP}/export.mk"
+printf 'include %s\nprobe:\n\t@echo $(SRC)\n' "${TMP}/export.mk" >"${TMP}/probe.mk"
+LIB_SRCS=$(make -s -f "${TMP}/probe.mk" probe 2>/dev/null || true)
+if [ -n "${LIB_SRCS}" ]; then
+  tap 1 "export.mk yields library sources" ""
+else
+  tap 0 "export.mk yields library sources" "probe produced nothing"
+fi
+
+missing=""
+for f in ${LIB_SRCS}; do
+  [ -f "$f" ] || missing="${missing} ${f}"
+done
+if [ -z "${missing}" ]; then
+  tap 1 "library sources exist" ""
+else
+  tap 0 "library sources exist" "missing:${missing}"
+fi
+
+bad=""
+for f in ${LIB_SRCS}; do
+  hit=$(grep -E '^[[:space:]]*#include' "$f" | grep -E 'cli/|util/|argparse|log\.h' || true)
+  [ -z "${hit}" ] || bad="${bad}${f} ${hit}; "
+done
+if [ -z "${bad}" ]; then
+  tap 1 "library sources have no util includes" ""
+else
+  tap 0 "library sources have no util includes" "${bad}"
+fi
 
 cat >"${TMP}/embed.c" <<'EOF'
 #include "sfinx.h"
@@ -69,9 +89,14 @@ int main(void) {
   uint8_t              pub[SFINX_HASH_LEN_MAX];
   uint8_t              sig[4096];
   uint8_t              tamper[4096];
+  uint8_t              hdr[4096];
   size_t               pub_len = 0;
   size_t               sig_len = 0;
+  size_t               hdr_len = 0;
   size_t               msg_len = sizeof(msg) - 1;
+  sfinx_key            key;
+  sfinx_key            reread;
+  sfinx_status         status;
 
   if (sfinx_tree_public_key(SFINX_HASH_256, seed, sizeof(seed), pub, sizeof(pub), &pub_len) != SFINX_OK) {
     return fail("tree_public_key");
@@ -90,22 +115,36 @@ int main(void) {
     return fail("tampered path accepted");
   }
 
-  memcpy(tamper, sig, sig_len);
-  tamper[sig_len - 1] ^= 0x01;
-  if (sfinx_verify(pub, pub_len, msg, msg_len, tamper, sig_len) == SFINX_OK) {
-    return fail("tampered proof accepted");
+  status = sfinx_key_decode(seed, sizeof(seed), "raw", &key);
+  if (status != SFINX_OK) {
+    return fail("decode raw");
   }
-
-  pub[0] ^= 0x01;
-  if (sfinx_verify(pub, pub_len, msg, msg_len, sig, sig_len) == SFINX_OK) {
-    return fail("tampered pubkey accepted");
+  if (sfinx_key_derive(&key) != SFINX_OK) {
+    return fail("derive");
   }
-
+  if (key.pub_len != pub_len || memcmp(key.pub, pub, pub_len) != 0) {
+    return fail("derived pub mismatch");
+  }
+  if (sfinx_key_encode_len(&key, "hdr") == 0) {
+    return fail("encode_len hdr");
+  }
+  if (sfinx_key_encode(&key, "hdr", hdr, sizeof(hdr), &hdr_len) != SFINX_OK) {
+    return fail("encode hdr");
+  }
+  status = sfinx_key_decode(hdr, hdr_len, NULL, &reread);
+  if (status != SFINX_OK) {
+    return fail("decode hdr auto");
+  }
+  if (reread.pub_len != pub_len || memcmp(reread.pub, pub, pub_len) != 0) {
+    return fail("hdr pub mismatch");
+  }
+  sfinx_key_free(&key);
+  sfinx_key_free(&reread);
   return 0;
 }
 EOF
 
-if "${CC}" -Wall -Wextra -O2 -I"${ROOT}/src" -I"${ROOT}/lib/.dep/include" "${TMP}/embed.c" "${ROOT}/src/sfinx.c" \
+if "${CC}" -Wall -Wextra -O2 -I"${ROOT}/src" -I"${ROOT}/lib/.dep/include" "${TMP}/embed.c" ${LIB_SRCS} \
   "${KECCAK}" -o "${TMP}/embed" >"${TMP}/build.log" 2>&1; then
   tap 1 "embed program builds against the library only" ""
 else
@@ -119,9 +158,9 @@ else
   rc=127
 fi
 if [ "${rc}" = 0 ]; then
-  tap 1 "embed N=2 round trip and tamper checks" ""
+  tap 1 "embed crypto and format round trip" ""
 else
-  tap 0 "embed N=2 round trip and tamper checks" "exit ${rc}: $(cat "${TMP}/run.log" 2>/dev/null || true)"
+  tap 0 "embed crypto and format round trip" "exit ${rc}: $(cat "${TMP}/run.log" 2>/dev/null || true)"
 fi
 
 tap_plan

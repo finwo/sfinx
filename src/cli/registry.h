@@ -1,10 +1,24 @@
 #ifndef __SFINX_CLI_REGISTRY_H__
 #define __SFINX_CLI_REGISTRY_H__
 
-typedef int (*cli_main_fn)(int argc, char **argv);
+// Registry {{{
+//
+// Commands prepend themselves on load
+//   names is a NULL terminated alias list, argv[0] is the command name
 
-void        cli_register(const char *name, cli_main_fn fn);
-cli_main_fn cli_find(const char *name);
-char       *cli_registered();
+struct cli_command {
+  struct cli_command *next;
+  const char *const  *names;
+  const char         *display;
+  const char         *description;
+  const char         *help;
+  int (*fn)(int argc, const char **argv);
+};
+
+extern struct cli_command *cli_commands;
+
+void                cli_command_register(struct cli_command *command);
+struct cli_command *cli_command_find(const char *name);
+// }}}
 
 #endif  // __SFINX_CLI_REGISTRY_H__

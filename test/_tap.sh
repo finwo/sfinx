@@ -1,4 +1,4 @@
-# test/_tap.sh - TAP helpers for the shell tests, source with `. test/_tap.sh`
+# TAP helpers, source with `. test/_tap.sh`
 # Mirrors test/_tap.c: tap_begin, tap, tap_check, tap_plan.
 
 TAP_NO=0
@@ -42,4 +42,15 @@ tap_plan() {
     return 1
   fi
   return 0
+}
+
+# Path to the built sfinx binary, building it once on demand
+ensure_bin() {
+  _root=$1
+  _target=$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)
+  _bin="${_root}/build/${_target}/sfinx"
+  if [ ! -x "${_bin}" ]; then
+    (cd "${_root}" && make) >/dev/null 2>&1 || true
+  fi
+  printf '%s\n' "${_bin}"
 }

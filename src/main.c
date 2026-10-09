@@ -1,30 +1,31 @@
-#include <libgen.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 
 #include "cli/registry.h"
+#include "cli/usage.h"
+#include "sfinx.h"
 
-int main(int argc, char *argv[]) {
-  const char *prog = basename(argv[0]);
+int main(int argc, char **argv) {
+  struct cli_command *command;
 
-  cli_main_fn fn = cli_find(prog);
-  if (fn) return fn(argc, argv);
-
-  // Not argv[0], see if it's given as subcommand
-  if (argc > 1 && (fn = cli_find(argv[1]))) {
-    char **shifted = malloc(sizeof(char *) * (size_t)argc);
-    if (!shifted) {
-      fprintf(stderr, "out of memory\n");
-      return 1;
-    }
-    shifted[0] = argv[1];
-    for (int i = 2; i < argc; i++) shifted[i - 1] = argv[i];
-    int rc = fn(argc - 1, shifted);
-    free(shifted);
-    return rc;
+  if (argc < 2) {
+    cli_print_global_usage();
+    return 1;
+  }
+  if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
+    cli_print_global_usage();
+    return 0;
+  }
+  if (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version")) {
+    fprintf(stdout, "%s\n", sfinx_version());
+    return 0;
   }
 
-  fprintf(stderr, "%s: unknown command: %s\n", argv[0], prog);
-  fprintf(stderr, "available commands: %s\n", cli_registered());
-  return 1;
+  command = cli_command_find(argv[1]);
+  if (!command) {
+    fprintf(stderr, "sfinx: unknown command: %s\n", argv[1]);
+    cli_print_global_usage();
+    return 1;
+  }
+  return command->fn(argc - 1, (const char **)(argv + 1));
 }

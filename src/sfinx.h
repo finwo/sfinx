@@ -80,6 +80,46 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
 sfinx_status sfinx_random_bytes(uint8_t *out, size_t len);
 // }}}
 
+// Key {{{
+//
+// Seed and public key pair, either half may be absent
+//   seed NULL means public-only, decode mallocs, sfinx_key_free releases
+
+typedef struct {
+  uint8_t   *seed;
+  size_t     seed_len;
+  uint8_t   *pub;
+  size_t     pub_len;
+  sfinx_hash hash;
+} sfinx_key;
+
+void         sfinx_key_init(sfinx_key *key);
+void         sfinx_key_free(sfinx_key *key);
+sfinx_status sfinx_key_derive(sfinx_key *key);
+// }}}
+
+// Formats {{{
+//
+// Pluggable key encodings, registered by constructors and detected by content
+//   decode with a NULL name auto-detects, encode_len sizes before encode
+
+typedef struct sfinx_format {
+  struct sfinx_format *next;
+  const char          *name;
+  int (*detect)(const uint8_t *data, size_t len);
+  sfinx_status (*decode)(const uint8_t *data, size_t len, sfinx_key *out);
+  size_t (*encode_len)(const sfinx_key *key);
+  sfinx_status (*encode)(const sfinx_key *key, uint8_t *out, size_t cap, size_t *len_out);
+} sfinx_format;
+
+void                sfinx_format_register(sfinx_format *format);
+const sfinx_format *sfinx_format_find(const char *name);
+
+sfinx_status sfinx_key_decode(const uint8_t *data, size_t len, const char *format, sfinx_key *out);
+size_t       sfinx_key_encode_len(const sfinx_key *key, const char *format);
+sfinx_status sfinx_key_encode(const sfinx_key *key, const char *format, uint8_t *out, size_t cap, size_t *len_out);
+// }}}
+
 #endif  // __SFINX_H__
 
 // vim:fdm=marker:fdl=0
