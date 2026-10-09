@@ -1,31 +1,44 @@
+#include <cofyc/argparse.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "cli/registry.h"
-#include "cli/usage.h"
 #include "sfinx.h"
+
+static const char *const usages[] = {
+    "sfinx [global] command [local]",
+    "sfinx help",
+    "sfinx --version",
+    NULL,
+};
 
 int main(int argc, char **argv) {
   struct cli_command *command;
+  struct argparse     argparse;
+  int                 version = 0;
 
-  if (argc < 2) {
-    cli_print_global_usage();
-    return 1;
-  }
-  if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
-    cli_print_global_usage();
-    return 0;
-  }
-  if (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version")) {
+  struct argparse_option options[] = {
+      OPT_HELP(),
+      OPT_BOOLEAN('V', "version", &version, "show version and exit", NULL, 0, 0),
+      OPT_END(),
+  };
+
+  argparse_init(&argparse, options, usages, ARGPARSE_STOP_AT_NON_OPTION);
+  argparse_describe(&argparse, NULL, command_list);
+  argc = argparse_parse(&argparse, argc, (const char **)argv);
+
+  if (version) {
     fprintf(stdout, "%s\n", sfinx_version());
     return 0;
   }
-
-  command = cli_command_find(argv[1]);
-  if (!command) {
-    fprintf(stderr, "sfinx: unknown command: %s\n", argv[1]);
-    cli_print_global_usage();
+  if (argc < 1) {
+    argparse_usage(&argparse);
     return 1;
   }
-  return command->fn(argc - 1, (const char **)(argv + 1));
+
+  command = cli_command_find(argv[0]);
+  if (!command) {
+    fprintf(stderr, "sfinx: unknown command: %s\n", argv[0]);
+    return 1;
+  }
+  return command->fn(argc, (const char **)argv);
 }

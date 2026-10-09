@@ -51,6 +51,38 @@ sfinx_status cli_seed_random(size_t len, uint8_t **out) {
   return SFINX_OK;
 }
 
+sfinx_status cli_key_derive(sfinx_key *key, size_t path_len) {
+  size_t       len;
+  uint8_t     *pub;
+  sfinx_status status;
+
+  if (!key->seed) {
+    return sfinx_key_derive(key);
+  }
+  len = sfinx_hash_len(key->hash);
+  if (len == 0) {
+    return SFINX_ERR_ARGS;
+  }
+  free(key->pub);
+  key->pub     = NULL;
+  key->pub_len = 0;
+  if (path_len != 0) {
+    return sfinx_key_derive(key);
+  }
+  pub = malloc(len);
+  if (!pub) {
+    return SFINX_ERR_NOSPACE;
+  }
+  status = sfinx_single_public_key(key->hash, key->seed, key->seed_len, pub, len, NULL);
+  if (status != SFINX_OK) {
+    free(pub);
+    return status;
+  }
+  key->pub     = pub;
+  key->pub_len = len;
+  return SFINX_OK;
+}
+
 static int hexval(int c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;

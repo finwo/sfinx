@@ -9,10 +9,12 @@ BIN=$(ensure_bin "${ROOT}")
 tap_begin "cli: subcommands"
 
 out=$("${BIN}" --help 2>&1 || true)
-case "${out}" in *"usage: sfinx"*) ok=1 ;; *) ok=0 ;; esac
+case "${out}" in *"Usage: sfinx"*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "--help shows usage" "${out}"
 
 out=$("${BIN}" help 2>&1 || true)
+case "${out}" in *"usage: sfinx"*) ok=1 ;; *) ok=0 ;; esac
+tap "${ok}" "help shows usage" "${out}"
 case "${out}" in *seed*) ok=1 ;; *) ok=0 ;; esac
 tap "${ok}" "help lists seed" "${out}"
 case "${out}" in *generate*) ok=1 ;; *) ok=0 ;; esac

@@ -16,6 +16,7 @@ struct cli_command {
 };
 
 extern struct cli_command *cli_commands;
+extern char               *command_list;
 
 void                cli_command_register(struct cli_command *command);
 struct cli_command *cli_command_find(const char *name);

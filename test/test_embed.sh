@@ -1,7 +1,7 @@
 #!/bin/sh
 # Reads export.mk for the library source list, compiles a program that includes
 # only sfinx.h against that list plus keccak-tiny, then exercises the crypto and
-# the key format API. No CLI, no util, no argparse, no rxi/log is reachable.
+# the key format API. No CLI, no util, no argparse is reachable.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "${HERE}/.." && pwd)
