@@ -37,8 +37,8 @@
 
 - Path:
   - The signer picks a random path of `N` bytes. It is the randomizer, so it never derives from the message.
-  - `path[0]` is near the root, `path[N-1]` selects the bottom leaf.
-  - One path byte selects a leaf in one subtree. Bit 7 (MSB) is the decision nearest the subtree root, bit 0 (LSB) is the decision at the leaf.
+  - `path[0]` is the most significant byte (near the root), `path[N-1]` the least significant (near the message).
+  - One path byte selects a leaf in one subtree. The most significant bit (bit 7) is the decision nearest the subtree root, the least significant bit (bit 0) the decision at the leaf.
   - `N` must be E4M4-representable, because the signature carries it as an E4M4 byte.
 
 - WOTS:
@@ -67,7 +67,7 @@
   - `N >= 1`: hash up to the subtree root one level at a time, consuming one neighbour and the matching path bit per step, LSB first. Repeat with the next WOTS up, until the top subtree root is compared to the public key.
 
 - Wire order:
-  - Numbers are MSB first, matching human notation: `E4M4(N)`, `E4M4(L)`, the path bytes (top byte first), the `bitlen` and `mask` bytes, and the checksum (high byte first).
+  - Numbers are MSB first, matching human notation: `E4M4(N)`, `E4M4(L)`, the path bytes (most significant, near the root, first), the `bitlen` and `mask` bytes, and the checksum (high byte first).
   - The Merkle neighbour list is a sequence, not a number, so it follows the verification algorithm: LSB (deepest) first, MSB (top) last.
 
 - Size and cost:
@@ -120,8 +120,8 @@ The signer picks a random path of `N` bytes. It is the randomizer, so it never
 derives from the message, and signing the same message twice lands on different
 keys.
 
-- `path[0]` is near the root, `path[N-1]` selects the bottom leaf.
-- One path byte selects a leaf in one subtree, MSB first.
+- `path[0]` is the most significant byte (near the root), `path[N-1]` the least significant (near the message).
+- One path byte selects a leaf in one subtree, most significant bit first.
 - A one-time key is named by the truncated path that reaches it, `path[0..k-1]` for a layer-`k` key. No mask and no layer byte, because the path is already split into bytes and SHA3 resists length extension.
 
 ### WOTS
