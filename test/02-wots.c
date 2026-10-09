@@ -70,18 +70,18 @@ int main(void) {
   tap(memcmp(pubkey, other, 32) != 0, "different seed gives a different pubkey", "pubkeys match");
 
   _sfinx_hash(SFINX_HASH_256, (const uint8_t *)"hello", 5, value);
-  _sfinx_wots_proof(SFINX_HASH_256, seed, seed_len, value, proof);
+  _sfinx_wots_sign(SFINX_HASH_256, seed, seed_len, value, sfinx_hash_len(SFINX_HASH_256), proof);
   tap(_sfinx_wots_verify(SFINX_HASH_256, pubkey, value, proof), "proof verifies", "verify failed");
 
   proof[17] ^= 0x40;
   tap(!_sfinx_wots_verify(SFINX_HASH_256, pubkey, value, proof), "tampered proof fails", "verify passed");
 
-  _sfinx_wots_proof(SFINX_HASH_256, seed, seed_len, value, proof);
+  _sfinx_wots_sign(SFINX_HASH_256, seed, seed_len, value, sfinx_hash_len(SFINX_HASH_256), proof);
   value[3] ^= 0x01;
   tap(!_sfinx_wots_verify(SFINX_HASH_256, pubkey, value, proof), "tampered value fails", "verify passed");
 
   _sfinx_hash(SFINX_HASH_256, (const uint8_t *)"hello", 5, value);
-  _sfinx_wots_proof(SFINX_HASH_256, seed, seed_len, value, proof);
+  _sfinx_wots_sign(SFINX_HASH_256, seed, seed_len, value, sfinx_hash_len(SFINX_HASH_256), proof);
   memcpy(other, pubkey, 32);
   other[0] ^= 0x01;
   tap(!_sfinx_wots_verify(SFINX_HASH_256, other, value, proof), "wrong pubkey fails", "verify passed");
@@ -89,7 +89,7 @@ int main(void) {
   for (size_t h = 0; h < 4; h++) {
     _sfinx_hash(hashes[h], (const uint8_t *)"message", 7, value);
     _sfinx_wots_pubkey(hashes[h], seed, seed_len, pubkey);
-    _sfinx_wots_proof(hashes[h], seed, seed_len, value, proof);
+    _sfinx_wots_sign(hashes[h], seed, seed_len, value, sfinx_hash_len(hashes[h]), proof);
     tap(_sfinx_wots_verify(hashes[h], pubkey, value, proof), labels[h], "verify failed");
   }
 
