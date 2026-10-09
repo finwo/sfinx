@@ -88,7 +88,7 @@
   - `len2 = 2` because `L * 255` fits in 2 base-256 bytes for every supported `L` (7,140 at `L = 28`, 16,320 at `L = 64`).
 
 - Parallelism:
-  - Hash chains are independent, so the library runs them in parallel when it is compiled with pthread support, and sequentially when it is not.
+  - Hash chains are independent, so the library is designed to run them in parallel when compiled with pthread support, and sequentially when it is not. Not implemented yet, see PLAN.md milestone 9.
   - Work is spread over a small worker pool sized to the machine's CPU count, and the switch is compile-time only. The output is identical either way, so it is invisible in the signature.
 
 ## How it works
@@ -192,11 +192,11 @@ a universal keyspace.
 
 `sfinx` is one binary that dispatches on its first argument.
 
-- `sfinx seed [length] [-o file]`: write `length` random seed bytes, default 32, to stdout or a file.
+- `sfinx seed [length] [-o file] [--force]`: write `length` random seed bytes, default 32, to stdout or a file.
 - `sfinx generate [length] [-L hash] [--out-fmt fmt] [-o file] [-F]`: generate a seed and derive its public key. `--out-fmt hdr` writes one combined file, `raw` and `hex` write a seed file and a `.pub` file beside it. Stdout carries the seed alone.
-- `sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]`: read a key file, derive the public key from the seed, and re-encode it. `--in-fmt` defaults to auto-detect, `--out-fmt` to `hdr`. `--public-only` drops the seed.
+- `sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only] [--force]`: read a key file, derive the public key from the seed, and re-encode it. `--in-fmt` defaults to auto-detect, `--out-fmt` to `hdr`. `--public-only` drops the seed.
 - `sfinx sign -k keyfile [-L hash] [-p path-len | -P path] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt] [-o file] [-F]`: sign a message and write the signature. `--key-fmt` defaults to auto-detect with a `raw` seed fallback, `--sig-fmt` to `hex` on stdout and `raw` to a file.
-- `sfinx verify -k keyfile [-L bits] [-s signature | -S signature-file] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt]`: verify a signature and print `OK` or `FAIL`. `--key-fmt` defaults to auto-detect with a `rawpub` fallback, `--sig-fmt` to auto-detect with a `raw` fallback.
+- `sfinx verify -k keyfile [-L hash] [-s signature | -S signature-file] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt]`: verify a signature and print `OK` or `FAIL`. `--key-fmt` defaults to auto-detect with a `rawpub` fallback, `--sig-fmt` to auto-detect with a `raw` fallback.
 - `sfinx help` and `sfinx version`.
 
 A key file carries a seed, a public key, or both. `hdr` is the text form (`hash:`, `seed:`, `public-key:`, `signature:`), and `raw`, `hex`, `rawpub`, and `hexpub` are the bare forms. The encode and decode code lives in the library, so any program using sfinx reads and writes the same files.
