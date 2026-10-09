@@ -36,6 +36,10 @@ test:
 # Never let the catch-all try to rebuild the makefiles themselves
 Makefile: ;
 
+.PHONY: format
+format:
+	$(FIND) src/ -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -i {} +
+
 # Forward any other goal verbatim into the assembled target tree
 .PHONY: FORCE
 FORCE:
