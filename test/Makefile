@@ -1,11 +1,13 @@
 CC ?= cc
 CFLAGS ?= -Wall -Wextra -O2
-CFLAGS += -I..
+CFLAGS += -I.. -I../lib/.dep/include
 
 OUT := ../build/test
 SRCS := $(filter-out _tap.c,$(wildcard *.c))
 TESTS := $(patsubst %.c,%,$(SRCS))
 BINS := $(addprefix $(OUT)/,$(TESTS))
+
+KECCAK := ../lib/coruus/keccak-tiny/keccak-tiny.c
 
 .PHONY: all
 all: $(BINS)
@@ -13,8 +15,11 @@ all: $(BINS)
 $(OUT):
 	@mkdir -p $(OUT)
 
-$(OUT)/%: %.c ../src/sfinx.c _tap.c | $(OUT)
-	@$(CC) $(CFLAGS) $< -o $@
+$(KECCAK):
+	@cd .. && dep install
+
+$(OUT)/%: %.c ../src/sfinx.c _tap.c $(KECCAK) | $(OUT)
+	@$(CC) $(CFLAGS) $< $(KECCAK) -o $@
 
 .PHONY: run
 run: all

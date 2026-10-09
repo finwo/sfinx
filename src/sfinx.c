@@ -1,4 +1,6 @@
-#include <stdint.h>
+#include "sfinx.h"
+
+#include <coruus/keccak-tiny.h>
 
 // E4M4 {{{
 //
@@ -35,6 +37,36 @@ static inline uint32_t _sfinx_e4m4_encode(uint32_t value, uint8_t *out) {
 
   *out = (uint8_t)(((shift + 1) << 4) | (base - 16));
   return 1;
+}
+// }}}
+
+// Hash backend {{{
+//
+// SHA3 for fixed-size hashing, SHAKE256 for the pre-image XOF
+//   _sfinx_hash(hash, in, in_len, out)
+//   _sfinx_shake256(in, in_len, out, out_len)
+
+static inline void _sfinx_hash(sfinx_hash hash, const uint8_t *in, size_t in_len, uint8_t *out) {
+  switch (hash) {
+    case SFINX_HASH_224: sha3_224(out, 28, in, in_len); break;
+    case SFINX_HASH_256: sha3_256(out, 32, in, in_len); break;
+    case SFINX_HASH_384: sha3_384(out, 48, in, in_len); break;
+    case SFINX_HASH_512: sha3_512(out, 64, in, in_len); break;
+  }
+}
+
+static inline void _sfinx_shake256(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
+  shake256(out, out_len, in, in_len);
+}
+
+size_t sfinx_hash_len(sfinx_hash hash) {
+  switch (hash) {
+    case SFINX_HASH_224: return 28;
+    case SFINX_HASH_256: return 32;
+    case SFINX_HASH_384: return 48;
+    case SFINX_HASH_512: return 64;
+  }
+  return 0;
 }
 // }}}
 
