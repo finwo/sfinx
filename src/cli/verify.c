@@ -26,12 +26,14 @@ static int cmd_verify(int argc, const char **argv) {
   size_t       msg_len      = 0;
   size_t       sig_data_len = 0;
   size_t       raw_len      = 0;
+  sfinx_hash   sig_hash;
+  size_t       sig_path;
   sfinx_key    key;
   sfinx_status status;
   int          rc = 1;
 
   static const char *const usages[] = {
-      "sfinx verify -k keyfile [-L bits] [-s signature | -S signature-file] [-m message | -M message-file] "
+      "sfinx verify -k keyfile [-L hash] [-s signature | -S signature-file] [-m message | -M message-file] "
       "[--key-fmt fmt] [--sig-fmt fmt]",
       NULL,
   };
@@ -90,9 +92,8 @@ static int cmd_verify(int argc, const char **argv) {
     fprintf(stderr, "sfinx: verify: cannot decode %s: %s\n", key_file, sfinx_strerror(status));
     goto done;
   }
-  if (sfinx_key_derive(&key) != SFINX_OK || !key.pub) {
-    fprintf(stderr, "sfinx: verify: key has no public key\n");
-    goto done;
+  if (hash != 0) {
+    key.hash = (sfinx_hash)hash;
   }
 
   if (cli_read_message(message, msg_file, &msg_data, &msg_len) != 0) {
@@ -122,13 +123,21 @@ static int cmd_verify(int argc, const char **argv) {
     }
   }
 
-  if (hash != 0) {
-    sfinx_hash sig_hash;
-    size_t     sig_path;
-    if (sfinx_signature_info(raw_sig, raw_len, &sig_hash, &sig_path) != SFINX_OK || (int)sig_hash != hash) {
-      fprintf(stderr, "sfinx: verify: signature is not %d-bit\n", hash);
-      goto done;
-    }
+  if (sfinx_signature_info(raw_sig, raw_len, &sig_hash, &sig_path) != SFINX_OK) {
+    fprintf(stderr, "sfinx: verify: invalid signature\n");
+    goto done;
+  }
+  if (hash != 0 && (int)sig_hash != hash) {
+    fprintf(stderr, "sfinx: verify: signature is not %d-bit\n", hash);
+    goto done;
+  }
+  if (key.seed && cli_key_derive(&key, sig_path == 0) != SFINX_OK) {
+    fprintf(stderr, "sfinx: verify: cannot derive the public key\n");
+    goto done;
+  }
+  if (!key.pub) {
+    fprintf(stderr, "sfinx: verify: key has no public key\n");
+    goto done;
   }
 
   if (sfinx_verify(key.pub, key.pub_len, msg_data, msg_len, raw_sig, raw_len) == SFINX_OK) {
@@ -153,7 +162,7 @@ static struct cli_command verify_command = {
     .display     = "verify",
     .description = "Verify a message signature",
     .help =
-        "sfinx verify -k keyfile [-L bits] [-s signature | -S signature-file] [-m message | -M message-file] "
+        "sfinx verify -k keyfile [-L hash] [-s signature | -S signature-file] [-m message | -M message-file] "
         "[--key-fmt fmt] [--sig-fmt fmt]",
     .fn = cmd_verify,
 };

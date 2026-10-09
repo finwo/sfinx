@@ -17,8 +17,9 @@ static int cmd_sign(int argc, const char **argv) {
   const char  *path_hex   = NULL;
   const char  *message    = NULL;
   const char  *msg_file   = NULL;
+  int          single     = 0;
   int          hash       = 0;
-  int          path_len   = SFINX_PATH_LEN_DEFAULT;
+  int          path_len   = -1;
   int          force      = 0;
   uint8_t     *key_data   = NULL;
   uint8_t     *msg_data   = NULL;
@@ -35,7 +36,8 @@ static int cmd_sign(int argc, const char **argv) {
   int          rc = 1;
 
   static const char *const usages[] = {
-      "sfinx sign -k keyfile [-L hash] [-p path-len | -P path] [-m message | -M message-file] [--key-fmt fmt] "
+      "sfinx sign -k keyfile [-L hash] [--single | -p path-len | -P path] [-m message | -M message-file] [--key-fmt "
+      "fmt] "
       "[--sig-fmt fmt] [-o file] [-F]",
       NULL,
   };
@@ -46,6 +48,7 @@ static int cmd_sign(int argc, const char **argv) {
       OPT_INTEGER('L', "hash", &hash, "hash size 224/256/384/512", NULL, 0, 0),
       OPT_INTEGER('p', "path-len", &path_len, "random path length", NULL, 0, 0),
       OPT_STRING('P', "path", &path_hex, "explicit path as hex", NULL, 0, 0),
+      OPT_BOOLEAN(0, "single", &single, "single-key mode, one WOTS key over H(message)", NULL, 0, 0),
       OPT_STRING('m', "message", &message, "message string", NULL, 0, 0),
       OPT_STRING('M', "message-file", &msg_file, "message file, - for stdin", NULL, 0, 0),
       OPT_STRING(0, "sig-fmt", &format, "signature format, hex on stdout and raw to a file by default", NULL, 0, 0),
@@ -71,6 +74,13 @@ static int cmd_sign(int argc, const char **argv) {
   if (message && msg_file) {
     fprintf(stderr, "sfinx: sign: --message and --message-file are exclusive\n");
     return 1;
+  }
+  if (single && (path_hex || path_len != -1)) {
+    fprintf(stderr, "sfinx: sign: --single cannot be combined with --path-len or --path\n");
+    return 1;
+  }
+  if (!single && path_len == -1) {
+    path_len = SFINX_PATH_LEN_DEFAULT;
   }
 
   if (util_file_read(key_file, &key_data, &key_len) != 0) {
@@ -102,14 +112,16 @@ static int cmd_sign(int argc, const char **argv) {
     goto done;
   }
 
-  if (path_hex) {
+  if (single) {
+    path_bytes = 0;
+  } else if (path_hex) {
     if (cli_hex_decode(path_hex, &path, &path_bytes) != 0 || !sfinx_path_len_valid(path_bytes)) {
       fprintf(stderr, "sfinx: sign: invalid path\n");
       goto done;
     }
   } else {
     if (path_len <= 0 || !sfinx_path_len_valid((size_t)path_len)) {
-      fprintf(stderr, "sfinx: sign: invalid path length: %d\n", path_len);
+      fprintf(stderr, "sfinx: sign: invalid path length: %d (use --single for single-key mode)\n", path_len);
       goto done;
     }
     path_bytes = (size_t)path_len;
@@ -130,7 +142,9 @@ static int cmd_sign(int argc, const char **argv) {
     fprintf(stderr, "sfinx: sign: out of memory\n");
     goto done;
   }
-  status = sfinx_tree_sign(key.hash, key.seed, key.seed_len, path, path_bytes, msg_data, msg_len, sig, sig_len, NULL);
+  status = single ? sfinx_single_sign(key.hash, key.seed, key.seed_len, msg_data, msg_len, sig, sig_len, NULL)
+                  : sfinx_tree_sign(key.hash, key.seed, key.seed_len, path, path_bytes, msg_data, msg_len, sig, sig_len,
+                                    NULL);
   if (status != SFINX_OK) {
     fprintf(stderr, "sfinx: sign: %s\n", sfinx_strerror(status));
     goto done;
@@ -175,7 +189,8 @@ static struct cli_command sign_command = {
     .display     = "sign",
     .description = "Sign a message",
     .help =
-        "sfinx sign -k keyfile [-L hash] [-p path-len | -P path] [-m message | -M message-file] [--key-fmt fmt] "
+        "sfinx sign -k keyfile [-L hash] [--single | -p path-len | -P path] [-m message | -M message-file] [--key-fmt "
+        "fmt] "
         "[--sig-fmt fmt] [-o file] [-F]",
     .fn = cmd_sign,
 };
