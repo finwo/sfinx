@@ -27,10 +27,10 @@ sfinx_status cli_seed_random(size_t len, uint8_t **out);
 // Key derive {{{
 //
 // Derive the public half of a key for one key mode
-//   path_len 0 selects the single-key mode, any other value the stacked subtrees
-//   a seed in the key wins over a stored public key, so --hash and --path-len cannot disagree with the file
+//   single selects the N = 0 key, otherwise the stacked subtrees
+//   a seed in the key wins over a stored public key, so --hash cannot disagree with the file
 
-sfinx_status cli_key_derive(sfinx_key *key, size_t path_len);
+sfinx_status cli_key_derive(sfinx_key *key, int single);
 // }}}
 
 #endif  // __SFINX_CLI_COMMON_H__

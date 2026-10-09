@@ -29,6 +29,10 @@ tap "$([ "${n}" = 32 ] && echo 1 || echo 0)" "hdr auto-detect gives a 32-byte pu
 n=$(wc -c <"${TMP}/pub512.bin" | tr -d '[:space:]')
 tap "$([ "${n}" = 64 ] && echo 1 || echo 0)" "--hash 512 gives a 64-byte pub" "got ${n}"
 
+"${BIN}" printkey -k "${TMP}/key.hdr" -L 512 --public-only --out-fmt rawpub >"${TMP}/pub512.stale"
+cmp -s "${TMP}/pub512.stale" "${TMP}/pub512.bin" && ok=1 || ok=0
+tap "${ok}" "a stored 32-byte pub does not survive --hash 512" "differs"
+
 "${BIN}" printkey -k "${TMP}/key.hdr" --public-only --out-fmt rawpub >"${TMP}/rawpub.bin"
 n=$(wc -c <"${TMP}/rawpub.bin" | tr -d '[:space:]')
 tap "$([ "${n}" = 32 ] && echo 1 || echo 0)" "out-fmt rawpub gives a 32-byte pub" "got ${n}"

@@ -65,6 +65,7 @@ static int cmd_generate(int argc, const char **argv) {
   const char  *format   = "hdr";
   const char  *pub_format;
   int          hash     = 0;
+  int          single   = 0;
   int          force    = 0;
   size_t       seed_len = CLI_SEED_LEN_DEFAULT;
   uint8_t     *seed     = NULL;
@@ -79,7 +80,7 @@ static int cmd_generate(int argc, const char **argv) {
   int          rc = 1;
 
   static const char *const usages[] = {
-      "sfinx generate [length] [-L hash] [--out-fmt fmt] [-o file] [-F]",
+      "sfinx generate [length] [-L hash] [--out-fmt fmt] [--single] [-o file] [-F]",
       NULL,
   };
   struct argparse_option options[] = {
@@ -88,6 +89,7 @@ static int cmd_generate(int argc, const char **argv) {
                  0),
       OPT_INTEGER('L', "hash", &hash, "hash size 224/256/384/512", NULL, 0, 0),
       OPT_STRING('o', "out", &out_file, "key file, - for stdout", NULL, 0, 0),
+      OPT_BOOLEAN(0, "single", &single, "single-key mode, derive the N = 0 public key", NULL, 0, 0),
       OPT_BOOLEAN('F', "force", &force, "overwrite existing files", NULL, 0, 0),
       OPT_END(),
   };
@@ -130,7 +132,7 @@ static int cmd_generate(int argc, const char **argv) {
     fprintf(stderr, "sfinx: generate: invalid hash size: %d\n", hash);
     goto done;
   }
-  status = sfinx_key_derive(&key);
+  status = cli_key_derive(&key, single);
   if (status != SFINX_OK) {
     fprintf(stderr, "sfinx: generate: cannot derive the public key: %s\n", sfinx_strerror(status));
     goto done;
@@ -209,7 +211,7 @@ static struct cli_command generate_command = {
     .names       = (const char *const[]){"generate", NULL},
     .display     = "generate",
     .description = "Generate a seed and its public key",
-    .help        = "sfinx generate [length] [-L hash] [--out-fmt fmt] [-o file] [-F]",
+    .help        = "sfinx generate [length] [-L hash] [--out-fmt fmt] [--single] [-o file] [-F]",
     .fn          = cmd_generate,
 };
 

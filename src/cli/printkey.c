@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common.h"
 #include "registry.h"
 #include "sfinx.h"
 #include "util/file.h"
@@ -13,6 +14,7 @@ static int cmd_printkey(int argc, const char **argv) {
   const char  *in_format   = NULL;
   int          hash        = 0;
   int          public_only = 0;
+  int          single      = 0;
   int          force       = 0;
   uint8_t     *data        = NULL;
   uint8_t     *out         = NULL;
@@ -23,7 +25,7 @@ static int cmd_printkey(int argc, const char **argv) {
   int          rc = 0;
 
   static const char *const usages[] = {
-      "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]",
+      "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] [--force]",
       NULL,
   };
   struct argparse_option options[] = {
@@ -34,6 +36,7 @@ static int cmd_printkey(int argc, const char **argv) {
       OPT_INTEGER('L', "hash", &hash, "hash size (224/256/384/512)", NULL, 0, 0),
       OPT_STRING('o', "out", &out_file, "write to a file instead of stdout", NULL, 0, 0),
       OPT_BOOLEAN(0, "public-only", &public_only, "output only the public key", NULL, 0, 0),
+      OPT_BOOLEAN(0, "single", &single, "single-key mode, derive the N = 0 public key", NULL, 0, 0),
       OPT_BOOLEAN(0, "force", &force, "overwrite an existing file", NULL, 0, 0),
       OPT_END(),
   };
@@ -69,7 +72,7 @@ static int cmd_printkey(int argc, const char **argv) {
     sfinx_key_free(&key);
     return 1;
   }
-  status = sfinx_key_derive(&key);
+  status = cli_key_derive(&key, single);
   if (status != SFINX_OK) {
     fprintf(stderr, "sfinx: printkey: cannot derive public key: %s\n", sfinx_strerror(status));
     sfinx_key_free(&key);
@@ -119,8 +122,10 @@ static struct cli_command printkey_command = {
     .names       = (const char *const[]){"printkey", NULL},
     .display     = "printkey",
     .description = "Print or convert a key file",
-    .help        = "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [-o file] [--public-only]",
-    .fn          = cmd_printkey,
+    .help =
+        "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] "
+        "[--force]",
+    .fn = cmd_printkey,
 };
 
 __attribute__((constructor)) static void printkey_register(void) {

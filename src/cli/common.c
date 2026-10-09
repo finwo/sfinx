@@ -51,7 +51,7 @@ sfinx_status cli_seed_random(size_t len, uint8_t **out) {
   return SFINX_OK;
 }
 
-sfinx_status cli_key_derive(sfinx_key *key, size_t path_len) {
+sfinx_status cli_key_derive(sfinx_key *key, int single) {
   size_t       len;
   uint8_t     *pub;
   sfinx_status status;
@@ -66,7 +66,7 @@ sfinx_status cli_key_derive(sfinx_key *key, size_t path_len) {
   free(key->pub);
   key->pub     = NULL;
   key->pub_len = 0;
-  if (path_len != 0) {
+  if (!single) {
     return sfinx_key_derive(key);
   }
   pub = malloc(len);
