@@ -22,6 +22,15 @@ typedef enum {
 size_t sfinx_hash_len(sfinx_hash hash);
 // }}}
 
+// Path {{{
+//
+// N is the number of subtrees, and the path length in bytes
+//   32 by default, at most 64
+
+#define SFINX_PATH_LEN_DEFAULT 32
+#define SFINX_PATH_LEN_MAX     64
+// }}}
+
 #endif  // __SFINX_H__
 
 // vim:fdm=marker:fdl=0
