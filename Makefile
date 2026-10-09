@@ -39,6 +39,7 @@ Makefile: ;
 .PHONY: format
 format:
 	$(FIND) src/ -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -i {} +
+	$(FIND) test/ -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -i {} +
 
 # Forward any other goal verbatim into the assembled target tree
 .PHONY: FORCE

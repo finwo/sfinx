@@ -9,7 +9,6 @@ int main_help(int argc, char *argv[]) {
   return 0;
 }
 
-__attribute__((constructor))
-static void register_help(void) {
+__attribute__((constructor)) static void register_help(void) {
   cli_register("help", main_help);
 }

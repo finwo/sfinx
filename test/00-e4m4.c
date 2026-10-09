@@ -1,8 +1,8 @@
-#include "src/sfinx.c"
-#include "_tap.c"
-
 #include <inttypes.h>
 #include <limits.h>
+
+#include "_tap.c"
+#include "src/sfinx.c"
 
 static void check_u32(uint32_t got, uint32_t want, const char *what) {
   tap(got == want, what, "got %" PRIu32 ", want %" PRIu32, got, want);
@@ -18,9 +18,9 @@ static void check_encode(uint32_t value, uint8_t want, const char *what) {
 }
 
 int main(void) {
-  uint8_t scratch = 0;
+  uint8_t  scratch  = 0;
   uint32_t round_ok = 1;
-  int bad = -1;
+  int      bad      = -1;
 
   tap_begin("sfinx E4M4");
 
@@ -55,11 +55,11 @@ int main(void) {
   check_u32(_sfinx_e4m4_encode(UINT32_MAX, &scratch), 0, "reject UINT32_MAX");
 
   for (int i = 0; i < 256; i++) {
-    uint8_t round = 0;
+    uint8_t  round = 0;
     uint32_t value = _sfinx_e4m4_decode((uint8_t)i);
     if (!_sfinx_e4m4_encode(value, &round) || round != (uint8_t)i) {
       round_ok = 0;
-      bad = i;
+      bad      = i;
       break;
     }
   }

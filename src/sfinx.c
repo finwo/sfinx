@@ -21,7 +21,7 @@ static inline uint32_t _sfinx_e4m4_encode(uint32_t value, uint8_t *out) {
     return 1;
   }
 
-  uint32_t base = value;
+  uint32_t base  = value;
   uint32_t shift = 0;
   while (base > 31) {
     base >>= 1;

@@ -3,8 +3,8 @@
 
 typedef int (*cli_main_fn)(int argc, char **argv);
 
-void cli_register(const char *name, cli_main_fn fn);
+void        cli_register(const char *name, cli_main_fn fn);
 cli_main_fn cli_find(const char *name);
-char * cli_registered();
+char       *cli_registered();
 
-#endif // __SFINX_CLI_REGISTRY_H__
+#endif  // __SFINX_CLI_REGISTRY_H__
