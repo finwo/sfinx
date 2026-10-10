@@ -1,6 +1,6 @@
 #!/bin/sh
 # Reads export.mk for the library source list, compiles a program that includes
-# only sfinx.h against that list plus keccak-tiny, then exercises the crypto and
+# only sfinx.h against that list plus keccak-fast, then exercises the crypto and
 # the key format API. No CLI, no util, no argparse is reachable.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -8,7 +8,8 @@ ROOT=$(cd "${HERE}/.." && pwd)
 . "${HERE}/_tap.sh"
 
 CC=${CC:-cc}
-KECCAK="${ROOT}/lib/coruus/keccak-tiny/keccak-tiny.c"
+HASH_FIRST="${ROOT}/lib/finwo/keccak-fast/src/keccak-fast.c"
+HASH="${HASH_FIRST} ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar.c ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar_bmi.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx2.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx512.c"
 
 tap_begin "embed: library stands alone"
 
@@ -26,13 +27,13 @@ else
   tap 0 "sfinx.h includes only stddef and stdint" "${bad}"
 fi
 
-if [ ! -f "${KECCAK}" ]; then
+if [ ! -f "${HASH_FIRST}" ]; then
   (cd "${ROOT}" && dep install) >/dev/null 2>&1 || true
 fi
-if [ -f "${KECCAK}" ] && [ -f "${ROOT}/lib/.dep/include/coruus/keccak-tiny.h" ]; then
+if [ -f "${HASH_FIRST}" ] && [ -f "${ROOT}/lib/.dep/include/finwo/keccak-fast.h" ]; then
   tap 1 "root dep installed" ""
 else
-  tap 0 "root dep installed" "dep install did not provide keccak-tiny"
+  tap 0 "root dep installed" "dep install did not provide keccak-fast"
 fi
 
 TMP=$(mktemp -d)
@@ -162,7 +163,7 @@ int main(void) {
 EOF
 
 if "${CC}" -Wall -Wextra -O2 -I"${ROOT}/src" -I"${ROOT}/lib/.dep/include" "${TMP}/embed.c" ${LIB_SRCS} \
-  "${KECCAK}" -o "${TMP}/embed" >"${TMP}/build.log" 2>&1; then
+  ${HASH} -o "${TMP}/embed" >"${TMP}/build.log" 2>&1; then
   tap 1 "embed program builds against the library only" ""
 else
   tap 0 "embed program builds against the library only" "$(cat "${TMP}/build.log")"

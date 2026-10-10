@@ -8,7 +8,11 @@ TESTS := $(patsubst %.c,%,$(SRCS))
 BINS := $(addprefix $(OUT)/,$(TESTS))
 SH := $(filter-out _tap.sh,$(wildcard *.sh))
 
-KECCAK := ../lib/coruus/keccak-tiny/keccak-tiny.c
+HASH := ../lib/finwo/keccak-fast/src/keccak-fast.c \
+        ../lib/finwo/keccak-fast/src/backend/scalar.c \
+        ../lib/finwo/keccak-fast/src/backend/scalar_bmi.c \
+        ../lib/finwo/keccak-fast/src/backend/avx2.c \
+        ../lib/finwo/keccak-fast/src/backend/avx512.c
 LIB := ../src/keypair.c $(wildcard ../src/fmt/*.c)
 
 .PHONY: all
@@ -17,14 +21,14 @@ all: $(BINS)
 $(OUT):
 	@mkdir -p $(OUT)
 
-$(KECCAK):
+$(HASH):
 	@cd .. && dep install
 
-$(OUT)/09-ref: 09-ref.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(KECCAK) | $(OUT)
-	@$(CC) $(CFLAGS) $< $(LIB) $(KECCAK) -o $@
+$(OUT)/09-ref: 09-ref.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
+	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
 
-$(OUT)/%: %.c ../src/sfinx.c _tap.c $(LIB) $(KECCAK) | $(OUT)
-	@$(CC) $(CFLAGS) $< $(LIB) $(KECCAK) -o $@
+$(OUT)/%: %.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
+	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
 
 .PHONY: run
 run: all
