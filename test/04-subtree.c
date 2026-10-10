@@ -63,5 +63,33 @@ int main(void) {
   }
   tap(memcmp(nodes, root, len) == 0, "manual fold matches the builder", "roots differ");
 
+  // The batched builder must match a per-key fold at every hash size
+  static const sfinx_hash sizes[] = {SFINX_HASH_224, SFINX_HASH_384, SFINX_HASH_512};
+  for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++) {
+    sfinx_hash h   = sizes[s];
+    size_t     l   = sfinx_hash_len(h);
+    size_t     cnt = 256;
+    uint8_t    broot[SFINX_HASH_LEN_MAX];
+    uint8_t    mkey[32];
+    uint8_t    mnodes[256 * SFINX_HASH_LEN_MAX];
+
+    tap(_sfinx_subtree_build(h, seed, seed_len, prefix, 3, idx, broot, NULL) != 0, "subtree builds at every size",
+        "build failed");
+    for (size_t i = 0; i < 256; i++) {
+      memcpy(mkey, seed, seed_len);
+      memcpy(mkey + seed_len, prefix, 3);
+      mkey[seed_len + 3] = (uint8_t)i;
+      _sfinx_wots_pubkey(h, mkey, seed_len + 4, mnodes + i * l);
+    }
+    for (size_t bitlen = 8; bitlen-- > 0;) {
+      cnt /= 2;
+      for (size_t j = 0; j < cnt; j++) {
+        _sfinx_merkle_parent(h, (uint8_t)bitlen, _sfinx_node_mask((uint8_t)bitlen, (uint8_t)(j << (8 - bitlen))),
+                             prefix, 3, mnodes + (2 * j) * l, mnodes + (2 * j + 1) * l, mnodes + j * l);
+      }
+    }
+    tap(memcmp(broot, mnodes, l) == 0, "batched builder matches the per-key fold at every size", "roots differ");
+  }
+
   return tap_plan();
 }

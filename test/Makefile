@@ -27,6 +27,10 @@ $(HASH):
 $(OUT)/09-ref: 09-ref.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
 	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
 
+$(OUT)/10-batch: CFLAGS += -Wno-unused-function
+$(OUT)/10-batch: 10-batch.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
+	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
+
 $(OUT)/%: %.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
 	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
 

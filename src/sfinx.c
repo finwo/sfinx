@@ -48,6 +48,7 @@ static inline uint32_t _sfinx_e4m4_encode(uint32_t value, uint8_t *out) {
 // SHA3 for fixed-size hashing, SHAKE256 for the pre-image XOF
 //   _sfinx_hash(hash, in, in_len, out)
 //   _sfinx_shake256(in, in_len, out, out_len)
+//   the _batch forms drive the equal-length loops over keccak-fast's SIMD kernels
 
 static inline void _sfinx_hash(sfinx_hash hash, const uint8_t *in, size_t in_len, uint8_t *out) {
   switch (hash) {
@@ -58,8 +59,22 @@ static inline void _sfinx_hash(sfinx_hash hash, const uint8_t *in, size_t in_len
   }
 }
 
+static inline void _sfinx_hash_batch(sfinx_hash hash, size_t count, const uint8_t *in, size_t in_len, uint8_t *out,
+                                     size_t out_len) {
+  switch (hash) {
+    case SFINX_HASH_224: kf_sha3_224_batch(count, in, in_len, out, out_len); break;
+    case SFINX_HASH_256: kf_sha3_256_batch(count, in, in_len, out, out_len); break;
+    case SFINX_HASH_384: kf_sha3_384_batch(count, in, in_len, out, out_len); break;
+    case SFINX_HASH_512: kf_sha3_512_batch(count, in, in_len, out, out_len); break;
+  }
+}
+
 static inline void _sfinx_shake256(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
   kf_shake256(out, out_len, in, in_len);
+}
+
+static inline void _sfinx_shake256_batch(size_t count, const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
+  kf_shake256_batch(count, in, in_len, out, out_len);
 }
 
 size_t sfinx_hash_len(sfinx_hash hash) {
@@ -97,6 +112,11 @@ static inline sfinx_hash _sfinx_hash_from_len(size_t len) {
 #define SFINX_WOTS_BYTES_MAX  ((SFINX_HASH_LEN_MAX + 2) * SFINX_HASH_LEN_MAX)
 #define SFINX_WOTS_DIGITS_MAX (SFINX_HASH_LEN_MAX + 2)
 
+// Cap on the seed-sized key staging buffer, so a large seed cannot force 256 copies at once
+#ifndef SFINX_BATCH_KEY_BUDGET
+#define SFINX_BATCH_KEY_BUDGET (64u * 1024u)
+#endif
+
 static inline void _sfinx_wots_preimage(sfinx_hash hash, const uint8_t *key, size_t key_len, uint8_t *out) {
   size_t len = sfinx_hash_len(hash);
   _sfinx_shake256(key, key_len, out, (len + 2) * len);
@@ -123,13 +143,14 @@ static inline void _sfinx_wots_chain(sfinx_hash hash, uint8_t *node, uint32_t st
 }
 
 static inline void _sfinx_wots_pubkey(sfinx_hash hash, const uint8_t *key, size_t key_len, uint8_t *pubkey_out) {
-  size_t  len = sfinx_hash_len(hash);
+  size_t  len   = sfinx_hash_len(hash);
+  size_t  count = len + 2;
   uint8_t ends[SFINX_WOTS_BYTES_MAX];
   _sfinx_wots_preimage(hash, key, key_len, ends);
-  for (size_t i = 0; i < len + 2; i++) {
-    _sfinx_wots_chain(hash, ends + i * len, 256);
+  for (uint32_t step = 0; step < 256u; step++) {
+    _sfinx_hash_batch(hash, count, ends, len, ends, len);
   }
-  _sfinx_hash(hash, ends, (len + 2) * len, pubkey_out);
+  _sfinx_hash(hash, ends, count * len, pubkey_out);
 }
 
 static inline sfinx_status _sfinx_wots_sign(sfinx_hash hash, const uint8_t *key, size_t key_len, const uint8_t *value,
@@ -202,23 +223,50 @@ static inline void _sfinx_merkle_parent(sfinx_hash hash, uint8_t bitlen, uint8_t
 
 static inline int _sfinx_subtree_build(sfinx_hash hash, const uint8_t *seed, size_t seed_len, const uint8_t *prefix,
                                        size_t prefix_len, uint8_t leaf_index, uint8_t *root_out, uint8_t *auth_out) {
-  size_t   len   = sfinx_hash_len(hash);
-  size_t   count = 256;
-  size_t   pos   = leaf_index;
+  size_t   len     = sfinx_hash_len(hash);
+  size_t   c       = len + 2;
+  size_t   key_len = seed_len + prefix_len + 1;
+  size_t   chunk   = SFINX_BATCH_KEY_BUDGET / key_len;
+  size_t   count   = 256;
+  size_t   pos     = leaf_index;
   uint8_t  nodes[256 * SFINX_HASH_LEN_MAX];
-  uint8_t *key = malloc(seed_len + prefix_len + 1);
-  if (!key) {
+  uint8_t *ends;
+  uint8_t *keybuf;
+
+  if (chunk == 0) {
+    chunk = 1;
+  }
+  if (chunk > count) {
+    chunk = count;
+  }
+  ends   = malloc(count * c * len);
+  keybuf = malloc(chunk * key_len);
+  if (!ends || !keybuf) {
+    free(ends);
+    free(keybuf);
     return 0;
   }
-  memcpy(key, seed, seed_len);
-  if (prefix_len > 0) {
-    memcpy(key + seed_len, prefix, prefix_len);
+  for (size_t base = 0; base < count; base += chunk) {
+    size_t n = count - base;
+    if (n > chunk) {
+      n = chunk;
+    }
+    for (size_t i = 0; i < n; i++) {
+      uint8_t *key = keybuf + i * key_len;
+      memcpy(key, seed, seed_len);
+      if (prefix_len > 0) {
+        memcpy(key + seed_len, prefix, prefix_len);
+      }
+      key[key_len - 1] = (uint8_t)(base + i);
+    }
+    _sfinx_shake256_batch(n, keybuf, key_len, ends + base * c * len, c * len);
   }
-  for (size_t i = 0; i < 256; i++) {
-    key[seed_len + prefix_len] = (uint8_t)i;
-    _sfinx_wots_pubkey(hash, key, seed_len + prefix_len + 1, nodes + i * len);
+  free(keybuf);
+  for (uint32_t step = 0; step < 256u; step++) {
+    _sfinx_hash_batch(hash, count * c, ends, len, ends, len);
   }
-  free(key);
+  _sfinx_hash_batch(hash, count, ends, c * len, nodes, len);
+  free(ends);
   for (size_t bitlen = 8; bitlen-- > 0;) {
     if (auth_out) {
       memcpy(auth_out + (7 - bitlen) * len, nodes + (pos ^ 1) * len, len);
