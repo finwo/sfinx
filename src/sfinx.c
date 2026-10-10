@@ -3,6 +3,7 @@
 #include <finwo/keccak-fast.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <unistd.h>
 
 #ifdef _REENTRANT
