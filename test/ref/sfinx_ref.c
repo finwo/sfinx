@@ -1,12 +1,12 @@
 // Reference signer {{{
 //
 // Independent re-derivation of the sfinx scheme from PLAN.md
-//   shares only the keccak-tiny primitive with src/sfinx.c
+//   shares only the keccak-fast primitive with src/sfinx.c
 //   a second code path, not a second language, so it checks the scheme logic and
 //   the byte layout, not the hash (the hash is anchored by test_openssl.sh)
 //   nothing here is production code, all symbols are static and prefixed ref_
 
-#include <coruus/keccak-tiny.h>
+#include <finwo/keccak-fast.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -31,15 +31,15 @@ static size_t ref_len(int bits) {
 
 static void ref_sha3(int bits, const uint8_t *in, size_t in_len, uint8_t *out) {
   switch (bits) {
-    case 224: sha3_224(out, 28, in, in_len); break;
-    case 256: sha3_256(out, 32, in, in_len); break;
-    case 384: sha3_384(out, 48, in, in_len); break;
-    case 512: sha3_512(out, 64, in, in_len); break;
+    case 224: kf_sha3_224(out, 28, in, in_len); break;
+    case 256: kf_sha3_256(out, 32, in, in_len); break;
+    case 384: kf_sha3_384(out, 48, in, in_len); break;
+    case 512: kf_sha3_512(out, 64, in, in_len); break;
   }
 }
 
 static void ref_shake(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
-  shake256(out, out_len, in, in_len);
+  kf_shake256(out, out_len, in, in_len);
 }
 
 static uint32_t ref_e4m4_decode(uint8_t byte) {

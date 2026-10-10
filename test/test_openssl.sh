@@ -23,13 +23,14 @@ tap 1 "openssl and od available" ""
 TMP=$(mktemp -d)
 trap 'rm -rf "${TMP}"' EXIT
 
-KECCAK="${ROOT}/lib/coruus/keccak-tiny/keccak-tiny.c"
-if [ ! -f "${KECCAK}" ]; then
+HASH_FIRST="${ROOT}/lib/finwo/keccak-fast/src/keccak-fast.c"
+HASH="${HASH_FIRST} ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar.c ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar_bmi.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx2.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx512.c"
+if [ ! -f "${HASH_FIRST}" ]; then
   (cd "${ROOT}" && dep install) >/dev/null 2>&1 || true
 fi
 
 if "${CC}" -Wall -Wextra -O2 -I"${ROOT}" -I"${ROOT}/src" -I"${ROOT}/lib/.dep/include" \
-  "${HERE}/ref/hash.c" "${KECCAK}" -o "${TMP}/hash" >"${TMP}/build.log" 2>&1; then
+  "${HERE}/ref/hash.c" ${HASH} -o "${TMP}/hash" >"${TMP}/build.log" 2>&1; then
   tap 1 "hash helper builds" ""
 else
   tap 0 "hash helper builds" "$(cat "${TMP}/build.log")"

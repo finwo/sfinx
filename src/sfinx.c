@@ -1,6 +1,6 @@
 #include "sfinx.h"
 
-#include <coruus/keccak-tiny.h>
+#include <finwo/keccak-fast.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -51,15 +51,15 @@ static inline uint32_t _sfinx_e4m4_encode(uint32_t value, uint8_t *out) {
 
 static inline void _sfinx_hash(sfinx_hash hash, const uint8_t *in, size_t in_len, uint8_t *out) {
   switch (hash) {
-    case SFINX_HASH_224: sha3_224(out, 28, in, in_len); break;
-    case SFINX_HASH_256: sha3_256(out, 32, in, in_len); break;
-    case SFINX_HASH_384: sha3_384(out, 48, in, in_len); break;
-    case SFINX_HASH_512: sha3_512(out, 64, in, in_len); break;
+    case SFINX_HASH_224: kf_sha3_224(out, 28, in, in_len); break;
+    case SFINX_HASH_256: kf_sha3_256(out, 32, in, in_len); break;
+    case SFINX_HASH_384: kf_sha3_384(out, 48, in, in_len); break;
+    case SFINX_HASH_512: kf_sha3_512(out, 64, in, in_len); break;
   }
 }
 
 static inline void _sfinx_shake256(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
-  shake256(out, out_len, in, in_len);
+  kf_shake256(out, out_len, in, in_len);
 }
 
 size_t sfinx_hash_len(sfinx_hash hash) {
