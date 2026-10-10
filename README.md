@@ -50,13 +50,28 @@ the signature and needs no flag.
 
 ## Embedding
 
-The library is `src/sfinx.c`, `src/keypair.c`, and `src/fmt/*.c`, listed in
-`export.mk`. Compile those plus the `finwo/keccak-fast` sources and include
-`<finwo/sfinx.h>`. No CLI, argparse, or util code is reachable from the library;
+sfinx is a [`dep`](https://git.finwo.net/app/dep/file/README.md.html) package.
+`dep` is a dependency manager for embedded C libraries: list a dependency in
+`.dep`, run `dep install`, and it unpacks the sources into `lib/` and merges
+each package's `export.mk` into `lib/.dep/config.mk`.
+
+Add sfinx to `.dep`:
+
+    finwo/sfinx    https://git.finwo.net/app/sfinx/archives/heads/main.tar.gz
+
+Then install:
+
+    $ dep install
+
+Install pulls the `finwo/keccak-fast` hash core in as well, and puts the header
+at `<finwo/sfinx.h>`. Include it and build against the exported sources.
+
+The library exports `src/sfinx.c`, `src/keypair.c`, and `src/fmt/*.c` through
+`export.mk`. No CLI, argparse, or util code is reachable from the library;
 `test/test_embed.sh` builds exactly that set.
 
 pthread is optional. The bundled CLI links it and runs the subtree build on a
-worker pool. The library manifest does not, so a consumer opts in.
+worker pool. The library export does not add `-pthread`, so a consumer opts in.
 
 ## Docs
 
