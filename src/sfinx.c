@@ -5,6 +5,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef _REENTRANT
+#include <pthread.h>
+#endif
+
 // E4M4 {{{
 //
 // Log-ish number format, only positive
@@ -191,6 +195,227 @@ static inline int _sfinx_wots_verify(sfinx_hash hash, const uint8_t *pubkey, con
 }
 // }}}
 
+// Pool {{{
+//
+// Compile-time worker pool for one top-level operation
+//   _REENTRANT: a round pulls indices from a shared counter, one scratch per worker
+//   otherwise, and for counts under two, the loop runs on the caller
+
+typedef void (*_sfinx_job_fn)(void *ctx, size_t index, void *scratch);
+
+#ifdef _REENTRANT
+typedef struct {
+  struct _sfinx_pool *pool;
+  size_t              index;
+} _sfinx_worker;
+#endif
+
+typedef struct _sfinx_pool {
+  size_t count;
+#ifdef _REENTRANT
+  pthread_t      *threads;
+  _sfinx_worker  *workers;
+  pthread_mutex_t mutex;
+  pthread_cond_t  work;
+  pthread_cond_t  done;
+  _sfinx_job_fn   fn;
+  void           *ctx;
+  size_t          total;
+  size_t          next;
+  size_t          completed;
+  unsigned long   round;
+  size_t          scratch;
+  uint8_t        *scratch_mem;
+  int             stop;
+#endif
+} _sfinx_pool;
+
+static inline size_t _sfinx_pool_scratch(size_t key_len) {
+  return key_len > SFINX_BATCH_KEY_BUDGET ? key_len : SFINX_BATCH_KEY_BUDGET;
+}
+
+#ifdef _REENTRANT
+static void *_sfinx_pool_worker(void *arg) {
+  _sfinx_worker *worker  = arg;
+  _sfinx_pool   *pool    = worker->pool;
+  uint8_t       *scratch = pool->scratch_mem + (worker->index + 1) * pool->scratch;
+  unsigned long  seen    = 0;
+
+  for (;;) {
+    pthread_mutex_lock(&pool->mutex);
+    while (!pool->stop && pool->round == seen) {
+      pthread_cond_wait(&pool->work, &pool->mutex);
+    }
+    if (pool->stop) {
+      pthread_mutex_unlock(&pool->mutex);
+      return NULL;
+    }
+    seen = pool->round;
+    pthread_mutex_unlock(&pool->mutex);
+    for (;;) {
+      size_t i;
+      pthread_mutex_lock(&pool->mutex);
+      if (pool->next >= pool->total) {
+        pthread_mutex_unlock(&pool->mutex);
+        break;
+      }
+      i = pool->next++;
+      pthread_mutex_unlock(&pool->mutex);
+      pool->fn(pool->ctx, i, scratch);
+      pthread_mutex_lock(&pool->mutex);
+      pool->completed++;
+      if (pool->completed == pool->total) {
+        pthread_cond_broadcast(&pool->done);
+      }
+      pthread_mutex_unlock(&pool->mutex);
+    }
+  }
+}
+#endif
+
+static void _sfinx_pool_destroy(_sfinx_pool *pool) {
+#ifdef _REENTRANT
+  if (!pool) {
+    return;
+  }
+  pthread_mutex_lock(&pool->mutex);
+  pool->stop = 1;
+  pthread_cond_broadcast(&pool->work);
+  pthread_mutex_unlock(&pool->mutex);
+  for (size_t i = 0; i < pool->count; i++) {
+    pthread_join(pool->threads[i], NULL);
+  }
+  pthread_mutex_destroy(&pool->mutex);
+  pthread_cond_destroy(&pool->work);
+  pthread_cond_destroy(&pool->done);
+  free(pool->scratch_mem);
+  free(pool->threads);
+  free(pool->workers);
+  free(pool);
+#else
+  (void)pool;
+#endif
+}
+
+static _sfinx_pool *_sfinx_pool_create(size_t scratch) {
+#ifdef _REENTRANT
+  _sfinx_pool *pool;
+  long         n;
+
+  if (scratch == 0) {
+    scratch = 1;
+  }
+  n = sysconf(_SC_NPROCESSORS_ONLN);
+  if (n <= 1) {
+    return NULL;
+  }
+  pool = calloc(1, sizeof(*pool));
+  if (!pool) {
+    return NULL;
+  }
+  pool->count       = (size_t)n;
+  pool->scratch     = scratch;
+  pool->scratch_mem = malloc((pool->count + 1) * scratch);
+  pool->threads     = calloc(pool->count, sizeof(*pool->threads));
+  pool->workers     = calloc(pool->count, sizeof(*pool->workers));
+  if (!pool->scratch_mem || !pool->threads || !pool->workers) {
+    free(pool->scratch_mem);
+    free(pool->threads);
+    free(pool->workers);
+    free(pool);
+    return NULL;
+  }
+  if (pthread_mutex_init(&pool->mutex, NULL) != 0) {
+    free(pool->scratch_mem);
+    free(pool->threads);
+    free(pool->workers);
+    free(pool);
+    return NULL;
+  }
+  if (pthread_cond_init(&pool->work, NULL) != 0) {
+    pthread_mutex_destroy(&pool->mutex);
+    free(pool->scratch_mem);
+    free(pool->threads);
+    free(pool->workers);
+    free(pool);
+    return NULL;
+  }
+  if (pthread_cond_init(&pool->done, NULL) != 0) {
+    pthread_cond_destroy(&pool->work);
+    pthread_mutex_destroy(&pool->mutex);
+    free(pool->scratch_mem);
+    free(pool->threads);
+    free(pool->workers);
+    free(pool);
+    return NULL;
+  }
+  for (size_t i = 0; i < pool->count; i++) {
+    pool->workers[i].pool  = pool;
+    pool->workers[i].index = i;
+  }
+  for (size_t i = 0; i < pool->count; i++) {
+    if (pthread_create(&pool->threads[i], NULL, _sfinx_pool_worker, &pool->workers[i]) != 0) {
+      pool->count = i;
+      _sfinx_pool_destroy(pool);
+      return NULL;
+    }
+  }
+  return pool;
+#else
+  (void)scratch;
+  return NULL;
+#endif
+}
+
+static void _sfinx_parallel_for(_sfinx_pool *pool, size_t count, _sfinx_job_fn fn, void *ctx) {
+  uint8_t *scratch;
+#ifdef _REENTRANT
+  if (pool && count >= 2) {
+    scratch = pool->scratch_mem;
+    pthread_mutex_lock(&pool->mutex);
+    pool->fn        = fn;
+    pool->ctx       = ctx;
+    pool->total     = count;
+    pool->next      = 0;
+    pool->completed = 0;
+    pool->round++;
+    pthread_cond_broadcast(&pool->work);
+    pthread_mutex_unlock(&pool->mutex);
+    for (;;) {
+      size_t i;
+      pthread_mutex_lock(&pool->mutex);
+      if (pool->next >= pool->total) {
+        pthread_mutex_unlock(&pool->mutex);
+        break;
+      }
+      i = pool->next++;
+      pthread_mutex_unlock(&pool->mutex);
+      fn(ctx, i, scratch);
+      pthread_mutex_lock(&pool->mutex);
+      pool->completed++;
+      if (pool->completed == pool->total) {
+        pthread_cond_broadcast(&pool->done);
+      }
+      pthread_mutex_unlock(&pool->mutex);
+    }
+    pthread_mutex_lock(&pool->mutex);
+    while (pool->completed < pool->total) {
+      pthread_cond_wait(&pool->done, &pool->mutex);
+    }
+    pthread_mutex_unlock(&pool->mutex);
+    return;
+  }
+  scratch = pool ? pool->scratch_mem : NULL;
+#else
+  (void)pool;
+  scratch = NULL;
+#endif
+  for (size_t i = 0; i < count; i++) {
+    fn(ctx, i, scratch);
+  }
+}
+// }}}
+
 // Subtree {{{
 //
 // One binary subtree of height 8, 256 WOTS leaves folded into a root
@@ -221,52 +446,113 @@ static inline void _sfinx_merkle_parent(sfinx_hash hash, uint8_t bitlen, uint8_t
   _sfinx_hash(hash, buf, at, out);
 }
 
-static inline int _sfinx_subtree_build(sfinx_hash hash, const uint8_t *seed, size_t seed_len, const uint8_t *prefix,
-                                       size_t prefix_len, uint8_t leaf_index, uint8_t *root_out, uint8_t *auth_out) {
-  size_t   len     = sfinx_hash_len(hash);
-  size_t   c       = len + 2;
-  size_t   key_len = seed_len + prefix_len + 1;
-  size_t   chunk   = SFINX_BATCH_KEY_BUDGET / key_len;
-  size_t   count   = 256;
-  size_t   pos     = leaf_index;
-  uint8_t  nodes[256 * SFINX_HASH_LEN_MAX];
-  uint8_t *ends;
-  uint8_t *keybuf;
+static inline void _sfinx_subtree_leaves(sfinx_hash hash, const uint8_t *seed, size_t seed_len, const uint8_t *prefix,
+                                         size_t prefix_len, size_t begin, size_t end, uint8_t *ends, uint8_t *nodes,
+                                         uint8_t *keybuf) {
+  size_t len     = sfinx_hash_len(hash);
+  size_t c       = len + 2;
+  size_t key_len = seed_len + prefix_len + 1;
+  size_t chunk   = SFINX_BATCH_KEY_BUDGET / key_len;
+  size_t n       = end - begin;
 
   if (chunk == 0) {
     chunk = 1;
   }
-  if (chunk > count) {
-    chunk = count;
-  }
-  ends   = malloc(count * c * len);
-  keybuf = malloc(chunk * key_len);
-  if (!ends || !keybuf) {
-    free(ends);
-    free(keybuf);
-    return 0;
-  }
-  for (size_t base = 0; base < count; base += chunk) {
-    size_t n = count - base;
-    if (n > chunk) {
-      n = chunk;
+  for (size_t base = 0; base < n; base += chunk) {
+    size_t m = n - base;
+    if (m > chunk) {
+      m = chunk;
     }
-    for (size_t i = 0; i < n; i++) {
+    for (size_t i = 0; i < m; i++) {
       uint8_t *key = keybuf + i * key_len;
       memcpy(key, seed, seed_len);
       if (prefix_len > 0) {
         memcpy(key + seed_len, prefix, prefix_len);
       }
-      key[key_len - 1] = (uint8_t)(base + i);
+      key[key_len - 1] = (uint8_t)(begin + base + i);
     }
-    _sfinx_shake256_batch(n, keybuf, key_len, ends + base * c * len, c * len);
+    _sfinx_shake256_batch(m, keybuf, key_len, ends + (begin + base) * c * len, c * len);
   }
-  free(keybuf);
   for (uint32_t step = 0; step < 256u; step++) {
-    _sfinx_hash_batch(hash, count * c, ends, len, ends, len);
+    _sfinx_hash_batch(hash, n * c, ends + begin * c * len, len, ends + begin * c * len, len);
   }
-  _sfinx_hash_batch(hash, count, ends, c * len, nodes, len);
-  free(ends);
+  _sfinx_hash_batch(hash, n, ends + begin * c * len, c * len, nodes + begin * len, len);
+}
+
+typedef struct {
+  sfinx_hash     hash;
+  const uint8_t *seed;
+  size_t         seed_len;
+  const uint8_t *prefix;
+  size_t         prefix_len;
+  size_t         chunk;
+  size_t         count;
+  uint8_t       *ends;
+  uint8_t       *nodes;
+} _sfinx_subtree_ctx;
+
+static void _sfinx_subtree_job(void *vctx, size_t index, void *scratch) {
+  _sfinx_subtree_ctx *ctx   = vctx;
+  size_t              begin = index * ctx->chunk;
+  size_t              end   = begin + ctx->chunk;
+
+  if (end > ctx->count) {
+    end = ctx->count;
+  }
+  _sfinx_subtree_leaves(ctx->hash, ctx->seed, ctx->seed_len, ctx->prefix, ctx->prefix_len, begin, end, ctx->ends,
+                        ctx->nodes, scratch);
+}
+
+static inline int _sfinx_subtree_build(_sfinx_pool *pool, sfinx_hash hash, const uint8_t *seed, size_t seed_len,
+                                       const uint8_t *prefix, size_t prefix_len, uint8_t leaf_index, uint8_t *root_out,
+                                       uint8_t *auth_out) {
+  size_t   len     = sfinx_hash_len(hash);
+  size_t   c       = len + 2;
+  size_t   key_len = seed_len + prefix_len + 1;
+  size_t   count   = 256;
+  size_t   pos     = leaf_index;
+  uint8_t  nodes[256 * SFINX_HASH_LEN_MAX];
+  uint8_t *ends;
+
+  ends = malloc(count * c * len);
+  if (!ends) {
+    return 0;
+  }
+  if (pool) {
+    _sfinx_subtree_ctx ctx = {
+        .hash       = hash,
+        .seed       = seed,
+        .seed_len   = seed_len,
+        .prefix     = prefix,
+        .prefix_len = prefix_len,
+        .chunk      = (count + pool->count - 1) / pool->count,
+        .count      = count,
+        .ends       = ends,
+        .nodes      = nodes,
+    };
+    size_t jobs;
+    if (ctx.chunk == 0) {
+      ctx.chunk = 1;
+    }
+    jobs = (count + ctx.chunk - 1) / ctx.chunk;
+    _sfinx_parallel_for(pool, jobs, _sfinx_subtree_job, &ctx);
+  } else {
+    size_t   chunk = SFINX_BATCH_KEY_BUDGET / key_len;
+    uint8_t *keybuf;
+    if (chunk == 0) {
+      chunk = 1;
+    }
+    if (chunk > count) {
+      chunk = count;
+    }
+    keybuf = malloc(chunk * key_len);
+    if (!keybuf) {
+      free(ends);
+      return 0;
+    }
+    _sfinx_subtree_leaves(hash, seed, seed_len, prefix, prefix_len, 0, count, ends, nodes, keybuf);
+    free(keybuf);
+  }
   for (size_t bitlen = 8; bitlen-- > 0;) {
     if (auth_out) {
       memcpy(auth_out + (7 - bitlen) * len, nodes + (pos ^ 1) * len, len);
@@ -279,6 +565,7 @@ static inline int _sfinx_subtree_build(sfinx_hash hash, const uint8_t *seed, siz
     pos >>= 1;
   }
   memcpy(root_out, nodes, len);
+  free(ends);
   return 1;
 }
 
@@ -351,14 +638,19 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
 
 sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, uint8_t *pubkey_out,
                                    size_t pubkey_cap, size_t *pubkey_len_out) {
-  size_t len = sfinx_hash_len(hash);
+  size_t       len = sfinx_hash_len(hash);
+  _sfinx_pool *pool;
+  int          ok;
   if (len == 0 || !seed || seed_len > SFINX_SEED_LEN_MAX) {
     return SFINX_ERR_ARGS;
   }
   if (!pubkey_out || pubkey_cap < len) {
     return SFINX_ERR_NOSPACE;
   }
-  if (!_sfinx_subtree_build(hash, seed, seed_len, NULL, 0, 0, pubkey_out, NULL)) {
+  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + 1));
+  ok   = _sfinx_subtree_build(pool, hash, seed, seed_len, NULL, 0, 0, pubkey_out, NULL);
+  _sfinx_pool_destroy(pool);
+  if (!ok) {
     return SFINX_ERR_NOSPACE;
   }
   if (pubkey_len_out) {
@@ -370,16 +662,17 @@ sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t 
 sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_len, const uint8_t *path,
                              size_t path_len, const uint8_t *msg, size_t msg_len, uint8_t *sig, size_t sig_cap,
                              size_t *sig_len_out) {
-  size_t   len  = sfinx_hash_len(hash);
-  size_t   c    = len + 2;
-  size_t   need = sfinx_signature_len(hash, path_len);
-  uint8_t  org[SFINX_HASH_LEN_MAX];
-  uint8_t  value[SFINX_HASH_LEN_MAX];
-  uint8_t  root[SFINX_HASH_LEN_MAX];
-  uint8_t  auth[8 * SFINX_HASH_LEN_MAX];
-  uint8_t *key;
-  uint8_t *joined;
-  size_t   at;
+  size_t       len  = sfinx_hash_len(hash);
+  size_t       c    = len + 2;
+  size_t       need = sfinx_signature_len(hash, path_len);
+  uint8_t      org[SFINX_HASH_LEN_MAX];
+  uint8_t      value[SFINX_HASH_LEN_MAX];
+  uint8_t      root[SFINX_HASH_LEN_MAX];
+  uint8_t      auth[8 * SFINX_HASH_LEN_MAX];
+  uint8_t     *key;
+  uint8_t     *joined;
+  size_t       at;
+  _sfinx_pool *pool;
 
   if (len == 0 || !seed || !msg || seed_len > SFINX_SEED_LEN_MAX || !path || path_len == 0 ||
       !sfinx_path_len_valid(path_len)) {
@@ -395,6 +688,7 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
     free(key);
     return SFINX_ERR_NOSPACE;
   }
+  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + path_len));
   // Sign (path||message)
   memcpy(joined, path, path_len);
   memcpy(joined + path_len, msg, msg_len);
@@ -414,11 +708,13 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
   // WOTS-sign up the tree
   memcpy(value, org, len);
   for (size_t k = path_len; k >= 1; k--) {
-    if (!_sfinx_subtree_build(hash, seed, seed_len, path, k - 1, path[k - 1], root, auth)) {
+    if (!_sfinx_subtree_build(pool, hash, seed, seed_len, path, k - 1, path[k - 1], root, auth)) {
+      _sfinx_pool_destroy(pool);
       free(key);
       return SFINX_ERR_NOSPACE;
     }
     if (_sfinx_wots_sign(hash, key, seed_len + k, value, len, sig + at) != SFINX_OK) {
+      _sfinx_pool_destroy(pool);
       free(key);
       return SFINX_ERR_ARGS;
     }
@@ -428,6 +724,7 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
     memcpy(value, root, len);
   }
 
+  _sfinx_pool_destroy(pool);
   free(key);
   if (sig_len_out) {
     *sig_len_out = need;

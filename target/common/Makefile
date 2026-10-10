@@ -14,6 +14,10 @@ LDFLAGS?=
 CFLAGS +=-ffunction-sections -fdata-sections
 LDFLAGS+=-Wl,--gc-sections
 
+# pthread backs the optional worker pool in sfinx.c; the library manifest leaves it to the consumer
+CFLAGS +=-pthread
+LDFLAGS+=-pthread
+
 INCLUDES:=
 INCLUDES+=-I src
 

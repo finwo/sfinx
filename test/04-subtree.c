@@ -22,7 +22,7 @@ int main(void) {
 
   tap_begin("sfinx subtree");
 
-  tap(_sfinx_subtree_build(SFINX_HASH_256, seed, seed_len, prefix, 3, idx, root, auth), "subtree builds",
+  tap(_sfinx_subtree_build(NULL, SFINX_HASH_256, seed, seed_len, prefix, 3, idx, root, auth), "subtree builds",
       "build failed");
 
   memcpy(key, seed, seed_len);
@@ -42,7 +42,7 @@ int main(void) {
   _sfinx_subtree_verify(SFINX_HASH_256, prefix, 3, leaf2, idx, auth, built);
   tap(memcmp(built, root, len) != 0, "tampered leaf fails", "root matched");
 
-  tap(_sfinx_subtree_build(SFINX_HASH_256, seed, seed_len, prefix2, 3, idx, root2, NULL), "second subtree builds",
+  tap(_sfinx_subtree_build(NULL, SFINX_HASH_256, seed, seed_len, prefix2, 3, idx, root2, NULL), "second subtree builds",
       "build failed");
   tap(memcmp(root, root2, len) != 0, "prefix changes the subtree root", "roots match");
 
@@ -73,7 +73,7 @@ int main(void) {
     uint8_t    mkey[32];
     uint8_t    mnodes[256 * SFINX_HASH_LEN_MAX];
 
-    tap(_sfinx_subtree_build(h, seed, seed_len, prefix, 3, idx, broot, NULL) != 0, "subtree builds at every size",
+    tap(_sfinx_subtree_build(NULL, h, seed, seed_len, prefix, 3, idx, broot, NULL) != 0, "subtree builds at every size",
         "build failed");
     for (size_t i = 0; i < 256; i++) {
       memcpy(mkey, seed, seed_len);

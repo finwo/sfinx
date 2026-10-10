@@ -26,7 +26,7 @@ int main(void) {
     uint8_t    ref_auth[8 * SFINX_HASH_LEN_MAX];
     char       label[64];
 
-    tap(_sfinx_subtree_build(hash, seed, seed_len, prefix, sizeof(prefix), 0x5a, lib_root, lib_auth) != 0,
+    tap(_sfinx_subtree_build(NULL, hash, seed, seed_len, prefix, sizeof(prefix), 0x5a, lib_root, lib_auth) != 0,
         "chunked subtree builds", "build failed");
     ref_subtree(bit, seed, seed_len, prefix, sizeof(prefix), 0x5a, ref_root, ref_auth);
 

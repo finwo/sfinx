@@ -1,6 +1,7 @@
 CC ?= cc
 CFLAGS ?= -Wall -Wextra -O2
 CFLAGS += -I.. -I../src -I../lib/.dep/include
+CFLAGS += -pthread
 
 OUT := ../build/test
 SRCS := $(filter-out _tap.c,$(wildcard *.c))
