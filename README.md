@@ -73,6 +73,17 @@ The library exports `src/sfinx.c`, `src/keypair.c`, and `src/fmt/*.c` through
 pthread is optional. The bundled CLI links it and runs the subtree build on a
 worker pool. The library export does not add `-pthread`, so a consumer opts in.
 
+## Benchmark
+
+`make bench` builds `test/bench.c` twice, threaded and sequential, and times
+tree key derivation, tree signing, verification, and single-key signing.
+
+    $ make bench
+    $ make bench BENCH_ARGS='-L 512 -p 8 -n 5'
+
+`-L` sets the hash size (default 256), `-p` the path length in bytes (default
+32), and `-n` the repetitions, best reported (default 3).
+
 ## Docs
 
 - `docs/idea.md`: the rough idea, the glossary, and how the pieces fit.

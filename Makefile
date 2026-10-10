@@ -33,6 +33,10 @@ clean:
 test:
 	@$(MAKE) --no-print-directory --directory test run
 
+.PHONY: bench
+bench:
+	@$(MAKE) --no-print-directory --directory test bench BENCH_ARGS="$(BENCH_ARGS)"
+
 # Never let the catch-all try to rebuild the makefiles themselves
 Makefile: ;
 
