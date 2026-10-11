@@ -40,6 +40,14 @@ bench:
 # Never let the catch-all try to rebuild the makefiles themselves
 Makefile: ;
 
+STDDOC?=stddoc
+
+.PHONY: docs
+docs: docs/api.md
+
+docs/api.md: src/sfinx.h
+	$(STDDOC) < src/sfinx.h > docs/api.md
+
 .PHONY: format
 format:
 	$(FIND) src/ -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -i {} +
