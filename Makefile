@@ -16,10 +16,10 @@ build/${TARGET}/${BIN}: build/${TARGET} $(WATCH)
 	$(MAKE) --directory build/${TARGET} TARGET=${TARGET}
 
 build/${TARGET}: $(WATCH)
-	mkdir -p build/${TARGET}
-	cp -rT src/              build/${TARGET}/src
-	cp -rT target/common/    build/${TARGET}
-	cp -rT target/${TARGET}/ build/${TARGET}
+	mkdir -p build/${TARGET}/src
+	cp -R src/.              build/${TARGET}/src/
+	cp -R target/common/.    build/${TARGET}/
+	cp -R target/${TARGET}/. build/${TARGET}/
 
 .PHONY: targets
 targets:

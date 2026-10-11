@@ -10,10 +10,7 @@ BINS := $(addprefix $(OUT)/,$(TESTS))
 SH := $(filter-out _tap.sh,$(wildcard *.sh))
 
 HASH := ../lib/finwo/keccak-fast/src/keccak-fast.c \
-        ../lib/finwo/keccak-fast/src/backend/scalar.c \
-        ../lib/finwo/keccak-fast/src/backend/scalar_bmi.c \
-        ../lib/finwo/keccak-fast/src/backend/avx2.c \
-        ../lib/finwo/keccak-fast/src/backend/avx512.c
+        $(wildcard ../lib/finwo/keccak-fast/src/backend/*.c)
 LIB := ../src/keypair.c $(wildcard ../src/fmt/*.c)
 
 .PHONY: all

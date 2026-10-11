@@ -53,7 +53,7 @@ static args_result parse_args(int argc, char **argv, bench_args *out) {
   out->path_len = SFINX_PATH_LEN_DEFAULT;
   out->reps     = 3;
 
-  for (int i = 1; i < argc; i++) {
+  for (int i = 1; i < argc; i += 2) {
     const char *flag   = argv[i];
     const char *value  = i + 1 < argc ? argv[i + 1] : NULL;
     uint32_t    parsed = 0;
@@ -76,7 +76,6 @@ static args_result parse_args(int argc, char **argv, bench_args *out) {
       fprintf(stderr, "unknown flag: %s\n", flag);
       return ARGS_ERR;
     }
-    i++;
   }
 
   if (sfinx_hash_len(out->hash) == 0) {

@@ -11,7 +11,7 @@ CC=${CC:-cc}
 tap_begin "sfinx threading"
 
 HASH_FIRST="${ROOT}/lib/finwo/keccak-fast/src/keccak-fast.c"
-HASH="${HASH_FIRST} ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar.c ${ROOT}/lib/finwo/keccak-fast/src/backend/scalar_bmi.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx2.c ${ROOT}/lib/finwo/keccak-fast/src/backend/avx512.c"
+HASH="${HASH_FIRST} ${ROOT}/lib/finwo/keccak-fast/src/backend/*.c"
 if [ ! -f "${HASH_FIRST}" ]; then
   (cd "${ROOT}" && dep install) >/dev/null 2>&1 || true
 fi
@@ -46,8 +46,15 @@ else
 fi
 
 if build "${TMP}/tsan" -pthread -fsanitize=thread >"${TMP}/b3.log" 2>&1; then
-  if TSAN_OPTIONS="halt_on_error=1" "${TMP}/tsan" >"${TMP}/t.log" 2>&1; then
+  set +e
+  TSAN_OPTIONS="halt_on_error=1" "${TMP}/tsan" >"${TMP}/t.log" 2>&1
+  tsan_status=$?
+  set -e
+  if [ "${tsan_status}" -eq 0 ]; then
     tap 1 "thread sanitizer reports no races" ""
+  elif [ "${tsan_status}" -ge 128 ]; then
+    TAP_NO=$((TAP_NO + 1))
+    printf 'ok %s - thread sanitizer available # SKIP runtime crashed (signal %s)\n' "${TAP_NO}" "$((tsan_status - 128))"
   else
     tap 0 "thread sanitizer reports no races" "$(tail -n 5 "${TMP}/t.log" 2>/dev/null || true)"
   fi

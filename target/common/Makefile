@@ -12,7 +12,11 @@ LDFLAGS?=
 
 # Drop unreferenced code: dependencies export whole libraries, of which we use a part
 CFLAGS +=-ffunction-sections -fdata-sections
+ifeq ($(shell uname -s),Darwin)
+LDFLAGS+=-Wl,-dead_strip
+else
 LDFLAGS+=-Wl,--gc-sections
+endif
 
 # pthread backs the optional worker pool in sfinx.c; the library manifest leaves it to the consumer
 CFLAGS +=-pthread

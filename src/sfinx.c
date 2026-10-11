@@ -773,8 +773,7 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   c = len + 2;
   if (path_len == 0) {
     _sfinx_hash(hash, msg, msg_len, org);
-    _sfinx_wots_rebuild(hash, org, sig + at, leaf);
-    return memcmp(leaf, pubkey, len) == 0 ? SFINX_OK : SFINX_ERR_VERIFY;
+    return _sfinx_wots_verify(hash, pubkey, org, sig + at) ? SFINX_OK : SFINX_ERR_VERIFY;
   }
   joined = malloc(path_len + msg_len);
   if (!joined) {
