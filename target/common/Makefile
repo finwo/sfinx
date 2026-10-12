@@ -38,6 +38,9 @@ OBJ:=$(SRC:.c=.o)
 .PHONY: default
 default: $(BIN)
 
+lib/.dep/config.mk:
+	@dep install
+
 %.o: %.c $(LIBS)
 	$(CC) $(CFLAGS) $(@:.o=.c) -D__NAME=\"$(BIN)\" -D__TARGET=\"$(TARGET)\" -c -o $@
 

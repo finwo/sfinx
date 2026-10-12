@@ -12,7 +12,6 @@ WATCH+=$(shell $(FIND) src -type f -name '*.h')
 default: build/${TARGET}/${BIN}
 
 build/${TARGET}/${BIN}: build/${TARGET} $(WATCH)
-	cd build/${TARGET} && dep install
 	$(MAKE) --directory build/${TARGET} TARGET=${TARGET}
 
 build/${TARGET}: $(WATCH)
@@ -57,5 +56,4 @@ format:
 .PHONY: FORCE
 FORCE:
 %: build/${TARGET} FORCE
-	cd build/${TARGET} && dep install
 	$(MAKE) --directory build/${TARGET} TARGET=${TARGET} $@
