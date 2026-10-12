@@ -32,11 +32,9 @@ The tree is binary, stacked as `N` subtrees of height `b = 8`.
 - Each subtree has 256 leaves, and each leaf is a WOTS public key.
 - Each subtree root is only a hash of its children.
 - The WOTS at layer `k` signs the root of the subtree below it.
+- The bottom WOTS has no subtree below it, so it signs `org = H(path | message)`.
 - The public key is the top subtree root, with nothing above it.
-
-Because the top subtree is fixed, its root is the same for every `N >= 1`, so
-one keypair covers every tree depth. The bottom WOTS has no subtree below it, so
-it signs `org = H(path | message)`.
+- The path length is part of every key derivation, so each depth has its own public key.
 
 `N = 0` collapses the whole thing: no subtrees, no path, and the public key is a
 single WOTS key over `org = H(message)`.
@@ -49,14 +47,14 @@ keys.
 
 - `path[0]` is the most significant byte (near the root), `path[N-1]` the least significant (near the message).
 - One path byte selects a leaf in one subtree, most significant bit first.
-- A one-time key is named by the truncated path that reaches it, `path[0..k-1]` for a layer-`k` key. No mask and no layer byte, because the path is already split into bytes and SHA3 resists length extension.
+- A one-time key is named `E4M4(N) | path[0..k-1]` for a layer-`k` key. No mask, because the path is already split into bytes and SHA3 resists length extension.
 - `N` must be E4M4-representable, because the signature carries it as an E4M4 byte.
 
 ## WOTS
 
 Each key is a Winternitz one-time signature over an `L`-byte value.
 
-- Pre-image: `SHAKE256(seed | path[0..k-1])` for a layer-`k` key, `c * L` bytes, split into `c = L + 2` chains of `L` bytes.
+- Pre-image: `SHAKE256(seed | E4M4(N) | path[0..k-1])` for a layer-`k` key, `c * L` bytes, split into `c = L + 2` chains of `L` bytes.
 - Chain `i` signs digit `i` by hashing its pre-image `digit[i]` times.
 - The first `L` digits are the signed value. The last `len2 = 2` digits are the checksum `C = sum(255 - digit[i])`.
 - The pubkey is `H(chain_end[0] | ... | chain_end[c-1])`, where a chain end is the pre-image hashed `w = 256` times.
@@ -116,22 +114,19 @@ is compared to the public key directly.
 - Numbers are MSB first, matching human notation: `E4M4(N)`, `E4M4(L)`, the path bytes (most significant, near the root, first), the `bitlen` and `mask` bytes, and the checksum (high byte first).
 - The Merkle neighbour list is a sequence, not a number, so it follows the verification algorithm: LSB (deepest) first, MSB (top) last.
 
-## Why reuse is fine
-
-The path is random, so every signature normally lands on a fresh set of one-time
-keys. The upper keys only ever sign a fixed subtree root, and the bottom key
-signs `org`, which changes with the path. As long as the path does not repeat, no
-key is ever asked to sign two different values.
-
 ## How many times can a seed sign?
 
-What eventually breaks is a path collision: two signatures reaching the same
-bottom key with different messages. The bottom key is named by the full `N`-byte
-path, so for the default `N = 32` the collision space is 256 bits.
+A key is named `E4M4(N) | path[0..k-1]`, which fixes what it signs: the subtree
+root beneath it when `k < N`, `org` when `k = N`. Two signatures share a key
+only at the same `N` and the same prefix.
 
-- Random path, which is what the library does: the birthday bound puts a 50 percent chance of one collision at about `2^128` signatures. The scheme is many-time up to roughly `2^128`, even though each individual key is one-time.
-- Tracked paths, where the caller never repeats one: the limit is the path space, `2^256` signatures, on one machine for one purpose. The library tracks nothing, so this is for the caller to build.
-- Single-key mode (`N = 0`): one key signs `H(message)` every time, so two different messages break it. That mode really is one-time.
+The limit is therefore a path collision: same `N`, same path, different message.
+The bottom key is named by the full path, so at the default `N = 32` the
+collision space is 256 bits.
+
+- Random path, what the library does: the birthday bound gives a 50 percent chance of one collision at about `2^128` signatures.
+- Tracked paths, where the caller never repeats one: the limit is the path space, `2^256`. The library tracks nothing, so the caller builds this.
+- Single-key mode (`N = 0`): one key signs `H(message)` every time, so two messages break it.
 
 ## No state
 

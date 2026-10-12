@@ -93,9 +93,9 @@ rc=0
 "${BIN}" generate abc >/dev/null 2>&1 || rc=$?
 tap "$([ "${rc}" != 0 ] && echo 1 || echo 0)" "rejects a non-numeric length" "exit ${rc}"
 
-"${BIN}" generate --out-fmt raw -o "${TMP}/v.key"
+"${BIN}" generate --out-fmt raw -p 2 -o "${TMP}/v.key"
 "${BIN}" sign -k "${TMP}/v.key" -m hello -P 0011 -o "${TMP}/v.sig"
-"${BIN}" verify -k "${TMP}/v.pub" -m hello -S "${TMP}/v.sig" >/dev/null && ok=1 || ok=0
+"${BIN}" verify -k "${TMP}/v.pub" -p 2 -m hello -S "${TMP}/v.sig" >/dev/null && ok=1 || ok=0
 tap "${ok}" "sign with the key, verify with the pub" "failed"
 
 tap_plan

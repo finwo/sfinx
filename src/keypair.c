@@ -11,7 +11,8 @@
 void sfinx_key_init(sfinx_key *key) {
   if (!key) return;
   memset(key, 0, sizeof(*key));
-  key->hash = SFINX_HASH_DEFAULT;
+  key->hash     = SFINX_HASH_DEFAULT;
+  key->path_len = -1;
 }
 
 void sfinx_key_free(sfinx_key *key) {
@@ -39,11 +40,14 @@ sfinx_status sfinx_key_derive(sfinx_key *key) {
   if (len == 0) {
     return SFINX_ERR_ARGS;
   }
+  if (key->path_len < 0) {
+    key->path_len = SFINX_PATH_LEN_DEFAULT;
+  }
   pub = malloc(len);
   if (!pub) {
     return SFINX_ERR_NOSPACE;
   }
-  status = sfinx_tree_public_key(key->hash, key->seed, key->seed_len, pub, len, NULL);
+  status = sfinx_tree_public_key(key->hash, key->seed, key->seed_len, (size_t)key->path_len, pub, len, NULL);
   if (status != SFINX_OK) {
     free(pub);
     return status;

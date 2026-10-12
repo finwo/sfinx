@@ -30,7 +30,7 @@ sfinx_status cli_seed_random(size_t len, uint8_t **out);
 //   single selects the N = 0 key, otherwise the stacked subtrees
 //   a seed in the key wins over a stored public key, so --hash cannot disagree with the file
 
-sfinx_status cli_key_derive(sfinx_key *key, int single);
+sfinx_status cli_key_derive(sfinx_key *key, int single, ssize_t path_len);
 // }}}
 
 #endif  // __SFINX_CLI_COMMON_H__

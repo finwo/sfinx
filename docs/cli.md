@@ -19,10 +19,10 @@ random path of 32 bytes, so the same message signs differently every time.
 ## Commands
 
 - `sfinx seed [length] [-o file] [--force]`: write `length` random seed bytes, default 32, to stdout or a file.
-- `sfinx generate [length] [-L hash] [--out-fmt fmt] [--single] [-o file] [-F]`: generate a seed and derive its public key. `--out-fmt hdr` writes one combined file, `raw` and `hex` write a key file and a `.pub` file beside it. Stdout carries the seed alone.
-- `sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] [--force]`: read a key file, derive the public key from the seed, and re-encode it. `--in-fmt` defaults to auto-detect, `--out-fmt` to `hdr`. `--public-only` drops the seed.
+- `sfinx generate [length] [-L hash] [-p path-len] [--out-fmt fmt] [--single] [-o file] [-F]`: generate a seed and derive its public key. `--out-fmt hdr` writes one combined file, `raw` and `hex` write a key file and a `.pub` file beside it. Stdout carries the seed alone.
+- `sfinx printkey -k file [-L hash] [-p path-len] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] [--force]`: read a key file, derive the public key from the seed, and re-encode it. `--in-fmt` defaults to auto-detect, `--out-fmt` to `hdr`. `--public-only` drops the seed.
 - `sfinx sign -k keyfile [-L hash] [--single | -p path-len | -P path] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt] [-o file] [-F]`: sign a message and write the signature. `--key-fmt` defaults to auto-detect with a `raw` seed fallback, `--sig-fmt` to `hex` on stdout and `raw` to a file.
-- `sfinx verify -k keyfile [-L hash] [-s signature | -S signature-file] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt]`: verify a signature and print `OK` or `FAIL`. `--key-fmt` defaults to auto-detect with a `rawpub` fallback, `--sig-fmt` to auto-detect with a `raw` fallback.
+- `sfinx verify -k keyfile [-L hash] [-p path-len] [-s signature | -S signature-file] [-m message | -M message-file] [--key-fmt fmt] [--sig-fmt fmt]`: verify a signature and print `OK` or `FAIL`. `--key-fmt` defaults to auto-detect with a `rawpub` fallback, `--sig-fmt` to auto-detect with a `raw` fallback.
 - `sfinx help` and `sfinx version`.
 
 `-h/--help` on any command prints its options.
@@ -30,7 +30,7 @@ random path of 32 bytes, so the same message signs differently every time.
 ## Hashing and paths
 
 - `-L hash`: hash size, one of `224`, `256`, `384`, `512`. Default `256`.
-- `-p path-len`: draw a random path of that many bytes.
+- `-p path-len`: the path length. `sign` draws a random path that long, `generate` and `printkey` derive the public key for it, `verify` cross-checks it against the signature.
 - `-P path`: use an explicit path, as hex.
 - `--single`: single-key mode (`N = 0`), one WOTS key signing `H(message)` for a seed.
 - `-F`, `--force`: overwrite existing output files.
@@ -48,7 +48,7 @@ sfinx reads and writes the same files.
 
 Key and signature formats (`--key-fmt`, `--sig-fmt`, `--in-fmt`, `--out-fmt`):
 
-- `hdr`: text, self-detecting. Lines are `hash:`, `seed:`, `public-key:`, and `signature:`, with hex values.
+- `hdr`: text, self-detecting. Lines are `hash:`, `seed:`, `public-key:`, `path-len:`, and `signature:`. `path-len:` is decimal and accompanies a public key, the rest are hex.
 - `raw`: bare bytes. A key seed is bare seed bytes, a signature is bare signature bytes.
 - `hex`: lowercase hex, one line.
 - `rawpub`: a bare public key, `L` bytes. Explicit only.
@@ -57,6 +57,9 @@ Key and signature formats (`--key-fmt`, `--sig-fmt`, `--in-fmt`, `--out-fmt`):
 Auto-detect (a null or omitted format) recognises `hdr` and `hex` by looking at
 the content. `raw`, `rawpub`, and `hexpub` are never guessed; name them
 explicitly.
+
+`verify` reads the path length from the signature. Only `hdr` records one, and a
+recorded length is cross-checked, naming a mismatch instead of reporting `FAIL`.
 
 The wire layout of the signature itself, including `E4M4(N)` and the path, is in
 `scheme.md`.

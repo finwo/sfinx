@@ -67,6 +67,7 @@ static int cmd_generate(int argc, const char **argv) {
   int          hash     = 0;
   int          single   = 0;
   int          force    = 0;
+  int          path_len = -1;
   size_t       seed_len = CLI_SEED_LEN_DEFAULT;
   uint8_t     *seed     = NULL;
   uint8_t     *key_buf  = NULL;
@@ -80,7 +81,7 @@ static int cmd_generate(int argc, const char **argv) {
   int          rc = 1;
 
   static const char *const usages[] = {
-      "sfinx generate [length] [-L hash] [--out-fmt fmt] [--single] [-o file] [-F]",
+      "sfinx generate [length] [-L hash] [-p len] [--out-fmt fmt] [--single] [-o file] [-F]",
       NULL,
   };
   struct argparse_option options[] = {
@@ -88,6 +89,7 @@ static int cmd_generate(int argc, const char **argv) {
       OPT_STRING(0, "out-fmt", &format, "hdr writes one file, raw and hex write a key file and a .pub file", NULL, 0,
                  0),
       OPT_INTEGER('L', "hash", &hash, "hash size 224/256/384/512", NULL, 0, 0),
+      OPT_INTEGER('p', "path-len", &path_len, "path length the public key is derived for", NULL, 0, 0),
       OPT_STRING('o', "out", &out_file, "key file, - for stdout", NULL, 0, 0),
       OPT_BOOLEAN(0, "single", &single, "single-key mode, derive the N = 0 public key", NULL, 0, 0),
       OPT_BOOLEAN('F', "force", &force, "overwrite existing files", NULL, 0, 0),
@@ -103,6 +105,19 @@ static int cmd_generate(int argc, const char **argv) {
   if (argc > 1) {
     fprintf(stderr, "sfinx: generate: too many arguments\n");
     return 1;
+  }
+  if (single && path_len != -1) {
+    fprintf(stderr, "sfinx: generate: --single cannot be combined with --path-len\n");
+    return 1;
+  }
+  if (!single) {
+    if (path_len == -1) {
+      path_len = SFINX_PATH_LEN_DEFAULT;
+    }
+    if (path_len <= 0 || !sfinx_path_len_valid((size_t)path_len)) {
+      fprintf(stderr, "sfinx: generate: invalid path length: %d\n", path_len);
+      return 1;
+    }
   }
   if (strcmp(format, "hdr") == 0) {
     pub_format = NULL;
@@ -132,7 +147,7 @@ static int cmd_generate(int argc, const char **argv) {
     fprintf(stderr, "sfinx: generate: invalid hash size: %d\n", hash);
     goto done;
   }
-  status = cli_key_derive(&key, single);
+  status = cli_key_derive(&key, single, (ssize_t)path_len);
   if (status != SFINX_OK) {
     fprintf(stderr, "sfinx: generate: cannot derive the public key: %s\n", sfinx_strerror(status));
     goto done;

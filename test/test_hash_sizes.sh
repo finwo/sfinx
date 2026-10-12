@@ -27,7 +27,7 @@ tap_begin "cli: hash sizes"
 
 for L in 28 32 48 64; do
   bits=$((L * 8))
-  "${BIN}" generate --out-fmt raw -L $bits -o "${TMP}/k$L.key"
+  "${BIN}" generate --out-fmt raw -L $bits -p 1 -o "${TMP}/k$L.key"
   "${BIN}" sign -k "${TMP}/k$L.key" -L $bits -P 0a -m 'hash size' -o "${TMP}/s$L.sig"
 
   n=$(bytes "${TMP}/s$L.sig")
@@ -36,7 +36,7 @@ for L in 28 32 48 64; do
   tap "$([ "$(bytes "${TMP}/k$L.pub")" = "${L}" ] && echo 1 || echo 0)" "L$L public key is ${L} bytes" \
     "got $(bytes "${TMP}/k$L.pub")"
 
-  "${BIN}" verify -k "${TMP}/k$L.pub" -L $bits -m 'hash size' -S "${TMP}/s$L.sig" >/dev/null && ok=1 || ok=0
+  "${BIN}" verify -k "${TMP}/k$L.pub" -L $bits -p 1 -m 'hash size' -S "${TMP}/s$L.sig" >/dev/null && ok=1 || ok=0
   tap "${ok}" "L$L round trip verifies" "failed"
 done
 
@@ -44,13 +44,13 @@ done
 cp "${TMP}/s32.sig" "${TMP}/bad-l.sig"
 patch_byte "${TMP}/bad-l.sig" 2 48
 rc=0
-"${BIN}" verify -k "${TMP}/k32.pub" -m 'hash size' -S "${TMP}/bad-l.sig" >/dev/null 2>&1 || rc=$?
+"${BIN}" verify -k "${TMP}/k32.pub" -p 1 -m 'hash size' -S "${TMP}/bad-l.sig" >/dev/null 2>&1 || rc=$?
 tap "$([ "${rc}" != 0 ] && echo 1 || echo 0)" "E4M4(L) 64 against a 32-byte key fails" "exit ${rc}"
 
 cp "${TMP}/s32.sig" "${TMP}/bad-l2.sig"
 patch_byte "${TMP}/bad-l2.sig" 2 31
 rc=0
-"${BIN}" verify -k "${TMP}/k32.pub" -m 'hash size' -S "${TMP}/bad-l2.sig" >/dev/null 2>&1 || rc=$?
+"${BIN}" verify -k "${TMP}/k32.pub" -p 1 -m 'hash size' -S "${TMP}/bad-l2.sig" >/dev/null 2>&1 || rc=$?
 tap "$([ "${rc}" != 0 ] && echo 1 || echo 0)" "an invalid E4M4(L) fails" "exit ${rc}"
 
 tap_plan

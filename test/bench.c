@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
   for (unsigned r = 0; r < args.reps && ok; r++) {
     size_t       got = 0;
     uint64_t     t0  = now_ns();
-    sfinx_status rc  = sfinx_tree_public_key(args.hash, seed, sizeof(seed), pub, len, &got);
+    sfinx_status rc  = sfinx_tree_public_key(args.hash, seed, sizeof(seed), args.path_len, pub, len, &got);
     double       dt  = elapsed_ms(t0);
     if (rc != SFINX_OK) {
       ok = 0;

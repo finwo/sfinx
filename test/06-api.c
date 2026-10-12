@@ -50,8 +50,11 @@ int main(void) {
       "single_sign rejects NULL seed", "accepted");
   tap(sfinx_single_sign(SFINX_HASH_256, (const uint8_t *)"seed", 4, NULL, 1, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
       "single_sign rejects NULL msg", "accepted");
-  tap(sfinx_tree_public_key(SFINX_HASH_256, NULL, 4, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
+  tap(sfinx_tree_public_key(SFINX_HASH_256, NULL, 4, 32, buf, sizeof(buf), NULL) == SFINX_ERR_ARGS,
       "tree_public_key rejects NULL seed", "accepted");
+  tap(sfinx_tree_public_key(SFINX_HASH_256, (const uint8_t *)"seed", 4, 0, buf, sizeof(buf), NULL) ==
+          SFINX_ERR_PATH_LEN,
+      "tree_public_key rejects a zero path length", "accepted");
   tap(sfinx_tree_sign(SFINX_HASH_256, NULL, 4, (const uint8_t *)"\x20", 1, (const uint8_t *)"m", 1, buf, sizeof(buf),
                       NULL) == SFINX_ERR_ARGS,
       "tree_sign rejects NULL seed", "accepted");

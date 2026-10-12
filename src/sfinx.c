@@ -106,7 +106,6 @@ static inline sfinx_hash _sfinx_hash_from_len(size_t len) {
 // WOTS {{{
 //
 // One WOTS key over an L-byte value, c = L + 2 chains of length 256
-//   key      = seed for N = 0, seed | path for a tree leaf
 //   preimage = SHAKE256(key), c * L bytes, c elements of L bytes
 //   digits   = the value bytes, then 2 checksum bytes of 255 - value[i]
 //   pubkey   = H of every element chained w times
@@ -637,19 +636,24 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
   return SFINX_OK;
 }
 
-sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, uint8_t *pubkey_out,
-                                   size_t pubkey_cap, size_t *pubkey_len_out) {
+sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, size_t path_len,
+                                   uint8_t *pubkey_out, size_t pubkey_cap, size_t *pubkey_len_out) {
   size_t       len = sfinx_hash_len(hash);
+  uint8_t      prefix;
   _sfinx_pool *pool;
   int          ok;
   if (len == 0 || !seed || seed_len > SFINX_SEED_LEN_MAX) {
     return SFINX_ERR_ARGS;
   }
+  if (path_len == 0 || !sfinx_path_len_valid(path_len)) {
+    return SFINX_ERR_PATH_LEN;
+  }
   if (!pubkey_out || pubkey_cap < len) {
     return SFINX_ERR_NOSPACE;
   }
-  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + 1));
-  ok   = _sfinx_subtree_build(pool, hash, seed, seed_len, NULL, 0, 0, pubkey_out, NULL);
+  _sfinx_e4m4_encode((uint32_t)path_len, &prefix);
+  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + 2));
+  ok   = _sfinx_subtree_build(pool, hash, seed, seed_len, &prefix, 1, 0, pubkey_out, NULL);
   _sfinx_pool_destroy(pool);
   if (!ok) {
     return SFINX_ERR_NOSPACE;
@@ -683,38 +687,38 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
     return SFINX_ERR_NOSPACE;
   }
   joined = malloc(path_len + msg_len);
-  key    = malloc(seed_len + path_len);
+  key    = malloc(seed_len + path_len + 1);
   if (!joined || !key) {
     free(joined);
     free(key);
     return SFINX_ERR_NOSPACE;
   }
-  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + path_len));
+  pool = _sfinx_pool_create(_sfinx_pool_scratch(seed_len + path_len + 1));
   // Sign (path||message)
   memcpy(joined, path, path_len);
   memcpy(joined + path_len, msg, msg_len);
   _sfinx_hash(hash, joined, path_len + msg_len, org);
   free(joined);
-  // Start at (seed||full-path) for WOTS
-  memcpy(key, seed, seed_len);
-  memcpy(key + seed_len, path, path_len);
 
-  // Prep sig header
+  // Prep sig header, sig[0..path_len] is also the derivation prefix
   _sfinx_e4m4_encode((uint32_t)path_len, sig);
   memcpy(sig + 1, path, path_len);
   at = 1 + path_len;
   _sfinx_e4m4_encode((uint32_t)len, sig + at);
   at += 1;
 
+  memcpy(key, seed, seed_len);
+  memcpy(key + seed_len, sig, path_len + 1);
+
   // WOTS-sign up the tree
   memcpy(value, org, len);
   for (size_t k = path_len; k >= 1; k--) {
-    if (!_sfinx_subtree_build(pool, hash, seed, seed_len, path, k - 1, path[k - 1], root, auth)) {
+    if (!_sfinx_subtree_build(pool, hash, seed, seed_len, sig, k, sig[k], root, auth)) {
       _sfinx_pool_destroy(pool);
       free(key);
       return SFINX_ERR_NOSPACE;
     }
-    if (_sfinx_wots_sign(hash, key, seed_len + k, value, len, sig + at) != SFINX_OK) {
+    if (_sfinx_wots_sign(hash, key, seed_len + k + 1, value, len, sig + at) != SFINX_OK) {
       _sfinx_pool_destroy(pool);
       free(key);
       return SFINX_ERR_ARGS;
@@ -787,7 +791,7 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   for (size_t k = path_len; k >= 1; k--) {
     _sfinx_wots_rebuild(hash, value, sig + at, leaf);
     at += c * len;
-    _sfinx_subtree_verify(hash, path, k - 1, leaf, path[k - 1], sig + at, root);
+    _sfinx_subtree_verify(hash, sig, k, leaf, sig[k], sig + at, root);
     at += 8 * len;
     if (k == 1) {
       return memcmp(root, pubkey, len) == 0 ? SFINX_OK : SFINX_ERR_VERIFY;

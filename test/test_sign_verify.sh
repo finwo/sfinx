@@ -11,7 +11,7 @@ trap 'rm -rf "${TMP}"' EXIT
 tap_begin "cli: sign and verify"
 
 "${BIN}" seed -o "${TMP}/seed.bin"
-"${BIN}" printkey --in-fmt raw -k "${TMP}/seed.bin" -o "${TMP}/key.hdr"
+"${BIN}" printkey --in-fmt raw -k "${TMP}/seed.bin" -p 2 -o "${TMP}/key.hdr"
 "${BIN}" printkey -k "${TMP}/key.hdr" --public-only -o "${TMP}/pub.hdr"
 
 "${BIN}" sign -k "${TMP}/key.hdr" -m hello -P 0011 -o "${TMP}/sig.bin"
@@ -33,11 +33,12 @@ tap "${ok}" "hdr signature auto-detected from stdin" "failed"
 
 "${BIN}" printkey -k "${TMP}/key.hdr" --public-only --out-fmt rawpub >"${TMP}/pub.bin"
 "${BIN}" sign --key-fmt raw -k "${TMP}/seed.bin" -m hello -P 0011 --sig-fmt hex -o "${TMP}/sig.hex"
-"${BIN}" verify --key-fmt rawpub -k "${TMP}/pub.bin" --sig-fmt hex -m hello -S "${TMP}/sig.hex" >/dev/null && ok=1 || ok=0
+"${BIN}" verify --key-fmt rawpub -k "${TMP}/pub.bin" -p 2 --sig-fmt hex -m hello -S "${TMP}/sig.hex" >/dev/null &&
+  ok=1 || ok=0
 tap "${ok}" "explicit key-fmt and sig-fmt round trip" "failed"
 
 "${BIN}" printkey -k "${TMP}/key.hdr" --public-only --out-fmt hexpub >"${TMP}/pub.hex"
-"${BIN}" verify --key-fmt hexpub -k "${TMP}/pub.hex" -m hello -S "${TMP}/sig.bin" >/dev/null && ok=1 || ok=0
+"${BIN}" verify --key-fmt hexpub -k "${TMP}/pub.hex" -p 2 -m hello -S "${TMP}/sig.bin" >/dev/null && ok=1 || ok=0
 tap "${ok}" "hexpub key reads back" "failed"
 
 printf 'hello' >"${TMP}/msg"

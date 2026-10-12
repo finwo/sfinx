@@ -15,6 +15,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 // Hash sizes {{{
 
@@ -179,13 +180,13 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
 ///>
 /// </details>
 /// <details>
-///   <summary>sfinx_tree_public_key(hash, seed, seed_len, pubkey_out, pubkey_cap, pubkey_len_out)</summary>
+///   <summary>sfinx_tree_public_key(hash, seed, seed_len, path_len, pubkey_out, pubkey_cap, pubkey_len_out)</summary>
 ///
-///   Derive the tree public key from a seed. The top subtree is fixed, so the
-///   result covers every path length at this hash size.
+///   Derive the tree public key from a seed. `N` is bound into every key, so a
+///   public key verifies one path length.
 ///< c
-sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, uint8_t *pubkey_out,
-                                   size_t pubkey_cap, size_t *pubkey_len_out);
+sfinx_status sfinx_tree_public_key(sfinx_hash hash, const uint8_t *seed, size_t seed_len, size_t path_len,
+                                   uint8_t *pubkey_out, size_t pubkey_cap, size_t *pubkey_len_out);
 ///>
 /// </details>
 /// <details>
@@ -227,13 +228,15 @@ sfinx_status sfinx_random_bytes(uint8_t *out, size_t len);
 /// ----
 ///
 /// A key holds a seed, a public key, or both. A null `seed` means public-only.
-/// Decoding allocates into the key, `sfinx_key_free` releases it.
+/// Decoding allocates into the key, `sfinx_key_free` releases it. `path_len`
+/// is the length the public half was derived for, -1 when not recorded.
 ///< c
 typedef struct {
   uint8_t   *seed;
   size_t     seed_len;
   uint8_t   *pub;
   size_t     pub_len;
+  ssize_t    path_len;
   sfinx_hash hash;
 } sfinx_key;
 ///>
@@ -241,7 +244,7 @@ typedef struct {
 /// <details>
 ///   <summary>sfinx_key_init(key)</summary>
 ///
-///   Zero a key and set the default hash size
+///   Zero a key and set the default hash size and path length
 ///< c
 void sfinx_key_init(sfinx_key *key);
 ///>
@@ -257,8 +260,8 @@ void sfinx_key_free(sfinx_key *key);
 /// <details>
 ///   <summary>sfinx_key_derive(key)</summary>
 ///
-///   Fill in the public key from the seed. A key that already carries one is
-///   left alone.
+///   Fill in the public key from the seed, for the key's `path_len`. A key
+///   that already carries one is left alone.
 ///< c
 sfinx_status sfinx_key_derive(sfinx_key *key);
 ///>

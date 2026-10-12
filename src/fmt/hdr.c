@@ -9,8 +9,9 @@
 //   hash: <bits>
 //   seed: <hex | (no seed)>
 //   public-key: <hex>
+//   path-len: <decimal>
 //   signature: <hex>
-//   labels are case-insensitive, first valid occurrence wins, a lone seed derives its public half
+//   labels are case-insensitive, first valid occurrence wins
 
 static int hdr_hexval(uint8_t c) {
   if (c >= '0' && c <= '9') return c - '0';
@@ -50,6 +51,24 @@ static void hdr_hex_encode(uint8_t *out, const uint8_t *in, size_t in_len) {
   }
 }
 
+static size_t hdr_uint_len(uint32_t value) {
+  size_t n = 1;
+  while (value >= 10) {
+    value /= 10;
+    n++;
+  }
+  return n;
+}
+
+static size_t hdr_uint_encode(uint8_t *out, uint32_t value) {
+  size_t n = hdr_uint_len(value);
+  for (size_t i = n; i-- > 0;) {
+    out[i] = (uint8_t)('0' + value % 10);
+    value /= 10;
+  }
+  return n;
+}
+
 static int hdr_match(const uint8_t *line, size_t len, const char *label, const uint8_t **val, size_t *val_len) {
   size_t at        = 0;
   size_t label_len = strlen(label);
@@ -84,6 +103,23 @@ static int hdr_scan(const uint8_t *data, size_t len, const char *label, const ui
   return 0;
 }
 
+static int hdr_scan_uint(const uint8_t *data, size_t len, const char *label, uint32_t *out) {
+  const uint8_t *val;
+  size_t         val_len;
+  uint32_t       acc = 0;
+  if (!hdr_scan(data, len, label, &val, &val_len) || val_len == 0) {
+    return 0;
+  }
+  for (size_t i = 0; i < val_len; i++) {
+    if (val[i] < '0' || val[i] > '9') {
+      return 0;
+    }
+    acc = acc * 10 + (uint32_t)(val[i] - '0');
+  }
+  *out = acc;
+  return 1;
+}
+
 static int hdr_key_detect(const uint8_t *data, size_t len) {
   const uint8_t *val;
   size_t         val_len;
@@ -95,21 +131,14 @@ static sfinx_status hdr_key_decode(const uint8_t *data, size_t len, sfinx_key *o
   size_t         val_len;
   int            have_seed = 0;
   int            have_pub  = 0;
+  uint32_t       num;
   sfinx_status   status;
 
-  if (hdr_scan(data, len, "hash", &val, &val_len)) {
-    uint32_t bits = 0;
-    int      ok   = val_len > 0;
-    for (size_t i = 0; i < val_len && ok; i++) {
-      if (val[i] < '0' || val[i] > '9') {
-        ok = 0;
-        break;
-      }
-      bits = bits * 10 + (uint32_t)(val[i] - '0');
-    }
-    if (ok && sfinx_hash_len((sfinx_hash)bits) != 0) {
-      out->hash = (sfinx_hash)bits;
-    }
+  if (hdr_scan_uint(data, len, "hash", &num) && sfinx_hash_len((sfinx_hash)num) != 0) {
+    out->hash = (sfinx_hash)num;
+  }
+  if (hdr_scan_uint(data, len, "path-len", &num) && sfinx_path_len_valid(num)) {
+    out->path_len = (ssize_t)num;
   }
   if (hdr_scan(data, len, "seed", &val, &val_len)) {
     have_seed = 1;
@@ -141,9 +170,6 @@ static sfinx_status hdr_key_decode(const uint8_t *data, size_t len, sfinx_key *o
 
   if (!have_seed && !have_pub) return SFINX_ERR_FORMAT;
   if (!out->seed && !out->pub) return SFINX_ERR_FORMAT;
-  if (out->seed && !out->pub && sfinx_key_derive(out) != SFINX_OK) {
-    return SFINX_ERR_FORMAT;
-  }
   return SFINX_OK;
 }
 
@@ -151,6 +177,9 @@ static size_t hdr_key_encode_len(const sfinx_key *key) {
   size_t need = strlen("hash: 000\n");
   need += strlen("seed: \n") + (key->seed ? key->seed_len * 2 : strlen("(no seed)"));
   need += strlen("public-key: \n") + (key->pub ? key->pub_len * 2 : strlen("(no public key)"));
+  if (key->pub && key->path_len >= 0) {
+    need += strlen("path-len: \n") + hdr_uint_len((uint32_t)key->path_len);
+  }
   return need;
 }
 
@@ -189,6 +218,13 @@ static sfinx_status hdr_key_encode(const sfinx_key *key, uint8_t *out, size_t ca
     at += 15;
   }
   out[at++] = '\n';
+
+  if (key->pub && key->path_len >= 0) {
+    memcpy(out + at, "path-len: ", 10);
+    at += 10;
+    at += hdr_uint_encode(out + at, (uint32_t)key->path_len);
+    out[at++] = '\n';
+  }
 
   if (len_out) {
     *len_out = at;

@@ -223,8 +223,10 @@ static void ref_single_sign(int bits, const uint8_t *seed, size_t seed_len, cons
   ref_wots_sign(bits, seed, seed_len, org, sig + 2);
 }
 
-static void ref_tree_pub(int bits, const uint8_t *seed, size_t seed_len, uint8_t *out) {
-  ref_subtree(bits, seed, seed_len, NULL, 0, 0, out, NULL);
+static void ref_tree_pub(int bits, const uint8_t *seed, size_t seed_len, size_t path_len, uint8_t *out) {
+  uint8_t prefix;
+  ref_e4m4_encode((uint32_t)path_len, &prefix);
+  ref_subtree(bits, seed, seed_len, &prefix, 1, 0, out, NULL);
 }
 
 static void ref_tree_sign(int bits, const uint8_t *seed, size_t seed_len, const uint8_t *path, size_t path_len,
@@ -236,9 +238,10 @@ static void ref_tree_sign(int bits, const uint8_t *seed, size_t seed_len, const 
   uint8_t  root[REF_LEN_MAX];
   uint8_t  auth[8 * REF_LEN_MAX];
   uint8_t  key[REF_KEY_MAX];
+  uint8_t  npath[REF_KEY_MAX];
   uint8_t *joined = malloc(path_len + msg_len);
 
-  if (!joined || seed_len + path_len + 1 > REF_KEY_MAX) {
+  if (!joined || seed_len + path_len + 2 > REF_KEY_MAX) {
     free(joined);
     return;
   }
@@ -255,16 +258,20 @@ static void ref_tree_sign(int bits, const uint8_t *seed, size_t seed_len, const 
   ref_e4m4_encode((uint32_t)len, sig + at);
   at += 1;
 
+  ref_e4m4_encode((uint32_t)path_len, npath);
+  for (size_t i = 0; i < path_len; i++) {
+    npath[1 + i] = path[i];
+  }
   for (size_t i = 0; i < seed_len; i++) {
     key[i] = seed[i];
   }
-  for (size_t i = 0; i < path_len; i++) {
-    key[seed_len + i] = path[i];
+  for (size_t i = 0; i <= path_len; i++) {
+    key[seed_len + i] = npath[i];
   }
 
   for (size_t k = path_len; k >= 1; k--) {
-    ref_subtree(bits, seed, seed_len, path, k - 1, path[k - 1], root, auth);
-    ref_wots_sign(bits, key, seed_len + k, value, sig + at);
+    ref_subtree(bits, seed, seed_len, npath, k, npath[k], root, auth);
+    ref_wots_sign(bits, key, seed_len + k + 1, value, sig + at);
     at += c * len;
     for (size_t i = 0; i < 8 * len; i++) {
       sig[at++] = auth[i];
@@ -342,9 +349,9 @@ static int ref_verify(const uint8_t *pub, size_t pub_len, const uint8_t *msg, si
       const uint8_t *sibling = sig + at + (size_t)depth * len;
       uint8_t        tmp[REF_LEN_MAX];
       if (pos & 1) {
-        ref_parent(bits, bitlen, mask, sig + 1, k - 1, sibling, root, tmp);
+        ref_parent(bits, bitlen, mask, sig, k, sibling, root, tmp);
       } else {
-        ref_parent(bits, bitlen, mask, sig + 1, k - 1, root, sibling, tmp);
+        ref_parent(bits, bitlen, mask, sig, k, root, sibling, tmp);
       }
       memcpy(root, tmp, len);
       pos >>= 1;

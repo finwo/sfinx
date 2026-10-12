@@ -16,6 +16,7 @@ static int cmd_printkey(int argc, const char **argv) {
   int          public_only = 0;
   int          single      = 0;
   int          force       = 0;
+  int          path_len    = -1;
   uint8_t     *data        = NULL;
   uint8_t     *out         = NULL;
   size_t       data_len    = 0;
@@ -25,7 +26,8 @@ static int cmd_printkey(int argc, const char **argv) {
   int          rc = 0;
 
   static const char *const usages[] = {
-      "sfinx printkey -k file [-L hash] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] [--force]",
+      "sfinx printkey -k file [-L hash] [-p len] [--in-fmt fmt] [--out-fmt fmt] [--single] [-o file] [--public-only] "
+      "[--force]",
       NULL,
   };
   struct argparse_option options[] = {
@@ -34,6 +36,7 @@ static int cmd_printkey(int argc, const char **argv) {
       OPT_STRING(0, "out-fmt", &format, "output format (default hdr)", NULL, 0, 0),
       OPT_STRING(0, "in-fmt", &in_format, "input format (default auto)", NULL, 0, 0),
       OPT_INTEGER('L', "hash", &hash, "hash size (224/256/384/512)", NULL, 0, 0),
+      OPT_INTEGER('p', "path-len", &path_len, "path length to derive the public key for", NULL, 0, 0),
       OPT_STRING('o', "out", &out_file, "write to a file instead of stdout", NULL, 0, 0),
       OPT_BOOLEAN(0, "public-only", &public_only, "output only the public key", NULL, 0, 0),
       OPT_BOOLEAN(0, "single", &single, "single-key mode, derive the N = 0 public key", NULL, 0, 0),
@@ -51,6 +54,14 @@ static int cmd_printkey(int argc, const char **argv) {
   }
   if (!key_file) {
     fprintf(stderr, "sfinx: printkey: missing --key-file\n");
+    return 1;
+  }
+  if (single && path_len != -1) {
+    fprintf(stderr, "sfinx: printkey: --single cannot be combined with --path-len\n");
+    return 1;
+  }
+  if (path_len != -1 && (path_len <= 0 || !sfinx_path_len_valid((size_t)path_len))) {
+    fprintf(stderr, "sfinx: printkey: invalid path length: %d\n", path_len);
     return 1;
   }
   if (util_file_read(key_file, &data, &data_len) != 0) {
@@ -72,7 +83,10 @@ static int cmd_printkey(int argc, const char **argv) {
     sfinx_key_free(&key);
     return 1;
   }
-  status = cli_key_derive(&key, single);
+  if (path_len != -1) {
+    key.path_len = (ssize_t)path_len;
+  }
+  status = cli_key_derive(&key, single, key.path_len);
   if (status != SFINX_OK) {
     fprintf(stderr, "sfinx: printkey: cannot derive public key: %s\n", sfinx_strerror(status));
     sfinx_key_free(&key);

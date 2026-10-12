@@ -21,6 +21,7 @@ int main(void) {
 
   sfinx_key_init(&key);
   tap(key.hash == SFINX_HASH_DEFAULT, "init sets the default hash", "got %d", (int)key.hash);
+  tap(key.path_len == -1, "init leaves the path length unrecorded", "got %zd", key.path_len);
   tap(key.seed == NULL && key.pub == NULL, "init zeroes both halves", "not zeroed");
 
   status = sfinx_key_decode(seed, sizeof(seed), "raw", &key);
@@ -28,7 +29,8 @@ int main(void) {
   tap(key.seed_len == sizeof(seed), "raw seed length", "got %zu", key.seed_len);
   tap(key.pub == NULL, "raw has no pub yet", "pub present");
 
-  status = sfinx_key_derive(&key);
+  key.path_len = 3;
+  status       = sfinx_key_derive(&key);
   tap(status == SFINX_OK, "derive", "%s", sfinx_strerror(status));
   tap(key.pub_len == 32, "derived pub length", "got %zu", key.pub_len);
 
@@ -43,6 +45,7 @@ int main(void) {
   tap(other.pub_len == key.pub_len && memcmp(other.pub, key.pub, key.pub_len) == 0, "hdr pub matches", "mismatch");
   tap(other.seed_len == key.seed_len && memcmp(other.seed, key.seed, key.seed_len) == 0, "hdr seed matches",
       "mismatch");
+  tap(other.path_len == key.path_len, "hdr path-len matches", "got %zd want %zd", other.path_len, key.path_len);
 
   free(other.seed);
   other.seed     = NULL;
@@ -77,6 +80,13 @@ int main(void) {
   status = sfinx_key_decode(hdr, hdr_len, "hexpub", &pubkey);
   tap(status == SFINX_OK && pubkey.pub_len == key.pub_len && memcmp(pubkey.pub, key.pub, key.pub_len) == 0,
       "hexpub round trip", "mismatch");
+  tap(pubkey.path_len == -1, "hexpub records no path length", "got %zd", pubkey.path_len);
+  sfinx_key_free(&pubkey);
+
+  sfinx_key_init(&pubkey);
+  status = sfinx_key_decode(seed, sizeof(seed), "raw", &pubkey);
+  tap(status == SFINX_OK && sfinx_key_derive(&pubkey) == SFINX_OK && pubkey.path_len == SFINX_PATH_LEN_DEFAULT,
+      "an unrecorded path length derives at the default", "got %zd", pubkey.path_len);
   sfinx_key_free(&pubkey);
 
   sfinx_key_free(&key);

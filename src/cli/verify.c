@@ -18,6 +18,7 @@ static int cmd_verify(int argc, const char **argv) {
   const char  *message      = NULL;
   const char  *msg_file     = NULL;
   int          hash         = 0;
+  int          path_len     = -1;
   uint8_t     *key_data     = NULL;
   uint8_t     *msg_data     = NULL;
   uint8_t     *sig_data     = NULL;
@@ -33,7 +34,7 @@ static int cmd_verify(int argc, const char **argv) {
   int          rc = 1;
 
   static const char *const usages[] = {
-      "sfinx verify -k keyfile [-L hash] [-s signature | -S signature-file] [-m message | -M message-file] "
+      "sfinx verify -k keyfile [-L hash] [-p len] [-s signature | -S signature-file] [-m message | -M message-file] "
       "[--key-fmt fmt] [--sig-fmt fmt]",
       NULL,
   };
@@ -43,6 +44,7 @@ static int cmd_verify(int argc, const char **argv) {
       OPT_STRING(0, "key-fmt", &key_format, "key format, auto by default", NULL, 0, 0),
       OPT_STRING(0, "sig-fmt", &format, "signature format, auto by default", NULL, 0, 0),
       OPT_INTEGER('L', "hash", &hash, "expected hash size", NULL, 0, 0),
+      OPT_INTEGER('p', "path-len", &path_len, "path length the public key is for", NULL, 0, 0),
       OPT_STRING('s', "signature", &signature, "signature as hex", NULL, 0, 0),
       OPT_STRING('S', "signature-file", &sig_file, "signature file, - for stdin", NULL, 0, 0),
       OPT_STRING('m', "message", &message, "message string", NULL, 0, 0),
@@ -131,8 +133,16 @@ static int cmd_verify(int argc, const char **argv) {
     fprintf(stderr, "sfinx: verify: signature is not %d-bit\n", hash);
     goto done;
   }
-  if (key.seed && cli_key_derive(&key, sig_path == 0) != SFINX_OK) {
-    fprintf(stderr, "sfinx: verify: cannot derive the public key\n");
+  if (path_len != -1) {
+    key.path_len = (ssize_t)path_len;
+  }
+  if (key.seed) {
+    if (cli_key_derive(&key, sig_path == 0, (ssize_t)sig_path) != SFINX_OK) {
+      fprintf(stderr, "sfinx: verify: cannot derive the public key\n");
+      goto done;
+    }
+  } else if (key.path_len >= 0 && (size_t)key.path_len != sig_path) {
+    fprintf(stderr, "sfinx: verify: public key is for path length %zd, signature uses %zu\n", key.path_len, sig_path);
     goto done;
   }
   if (!key.pub) {

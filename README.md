@@ -8,9 +8,9 @@ that is never stored. Every key is derived from the seed and the path that
 reaches it, so there is no counter and no state file to keep in sync. The secret
 is a seed, and the public key is a single hash.
 
-The hash size and the path length are arguments rather than build options, and
-the top of the tree is fixed, so one keypair covers every path length at a given
-hash size.
+The hash size and the tree depth (`-p`) are arguments rather than build options.
+The depth defaults to 32 and sets the signature size. The docs cover changing
+either.
 
 This project makes use of [dep](https://git.finwo.net/app/dep) to manage its
 dependencies and exports.
@@ -19,7 +19,7 @@ Features
 --------
 
 - The seed is any byte string up to 64 MiB, random bytes recommended
-- Hash size and path length are chosen per call
+- Hash size and tree depth are chosen per call
 - Hashing comes from [keccak-fast](https://git.finwo.net/lib/keccak-fast.c),
   dispatched per CPU and batched
 - C99 with POSIX calls, needing only libc and the hash core
@@ -61,7 +61,7 @@ Usage
 
 ```sh
 sfinx generate -o demo.key
-sfinx sign   -k demo.key -p 32 -m "hello sfinx" -o demo.sig
+sfinx sign   -k demo.key -m "hello sfinx" -o demo.sig
 sfinx verify -k demo.key -S demo.sig -m "hello sfinx"
 ```
 
@@ -70,8 +70,7 @@ random 32-byte path, so the same message signs differently every time, and
 `verify` prints `OK` or `FAIL`. At these defaults a signature is 43,042 bytes.
 
 The path is the randomizer and must not repeat across messages. Drawn at random
-it collides after roughly `2^128` signatures, which is what makes a one-time
-construction usable many times.
+it collides after roughly `2^128` signatures.
 
 ### Single-key mode
 

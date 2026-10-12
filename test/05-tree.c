@@ -9,7 +9,8 @@ int main(void) {
   static const uint8_t seed[] = "sfinx tree seed";
   static const uint8_t msg[]  = "hello tree";
   uint8_t              single_pub[SFINX_HASH_LEN_MAX];
-  uint8_t              tree_pub[SFINX_HASH_LEN_MAX];
+  uint8_t              tree_pub1[SFINX_HASH_LEN_MAX];
+  uint8_t              tree_pub2[SFINX_HASH_LEN_MAX];
   uint8_t              path1[1] = {0xa5};
   uint8_t              path2[2] = {0xa5, 0x3c};
   uint8_t              sig[SIG_MAX];
@@ -32,23 +33,29 @@ int main(void) {
   sig[5] ^= 0x01;
   tap(sfinx_verify(single_pub, len, msg, msg_len, sig, n0) != SFINX_OK, "single tamper fails", "verify passed");
 
-  tap(sfinx_tree_public_key(SFINX_HASH_256, seed, seed_len, tree_pub, len, &outlen) == SFINX_OK, "tree pubkey builds",
-      "build failed");
+  tap(sfinx_tree_public_key(SFINX_HASH_256, seed, seed_len, 1, tree_pub1, len, &outlen) == SFINX_OK,
+      "tree pubkey builds N=1", "build failed");
+  tap(sfinx_tree_public_key(SFINX_HASH_256, seed, seed_len, 2, tree_pub2, len, &outlen) == SFINX_OK,
+      "tree pubkey builds N=2", "build failed");
+  tap(memcmp(tree_pub1, tree_pub2, len) != 0, "one seed gives a pubkey per path length", "pubkeys match");
+
   tap(sfinx_tree_sign(SFINX_HASH_256, seed, seed_len, path1, 1, msg, msg_len, sig, n1, &outlen) == SFINX_OK,
       "tree signs N=1", "sign failed");
-  tap(sfinx_verify(tree_pub, len, msg, msg_len, sig, n1) == SFINX_OK, "tree verifies N=1", "verify failed");
+  tap(sfinx_verify(tree_pub1, len, msg, msg_len, sig, n1) == SFINX_OK, "tree verifies N=1", "verify failed");
   sig[n1 - 1] ^= 0x01;
-  tap(sfinx_verify(tree_pub, len, msg, msg_len, sig, n1) != SFINX_OK, "tree tamper N=1 fails", "verify passed");
+  tap(sfinx_verify(tree_pub1, len, msg, msg_len, sig, n1) != SFINX_OK, "tree tamper N=1 fails", "verify passed");
 
   tap(sfinx_tree_sign(SFINX_HASH_256, seed, seed_len, path2, 2, msg, msg_len, sig2, n2, &outlen) == SFINX_OK,
       "tree signs N=2", "sign failed");
-  tap(sfinx_verify(tree_pub, len, msg, msg_len, sig2, n2) == SFINX_OK, "tree verifies N=2", "verify failed");
-  tap(sfinx_verify(tree_pub, len, (const uint8_t *)"other", 5, sig2, n2) != SFINX_OK, "tree wrong message fails",
+  tap(sfinx_verify(tree_pub2, len, msg, msg_len, sig2, n2) == SFINX_OK, "tree verifies N=2", "verify failed");
+  tap(sfinx_verify(tree_pub1, len, msg, msg_len, sig2, n2) != SFINX_OK, "N=2 fails against the N=1 pubkey",
+      "verify passed");
+  tap(sfinx_verify(tree_pub2, len, (const uint8_t *)"other", 5, sig2, n2) != SFINX_OK, "tree wrong message fails",
       "verify passed");
 
-  tree_pub[0] ^= 0x01;
-  tap(sfinx_verify(tree_pub, len, msg, msg_len, sig2, n2) != SFINX_OK, "tree wrong pubkey fails", "verify passed");
-  tree_pub[0] ^= 0x01;
+  tree_pub2[0] ^= 0x01;
+  tap(sfinx_verify(tree_pub2, len, msg, msg_len, sig2, n2) != SFINX_OK, "tree wrong pubkey fails", "verify passed");
+  tree_pub2[0] ^= 0x01;
 
   return tap_plan();
 }

@@ -49,10 +49,10 @@ check_vector 384 0a     48 1 2787
 check_vector 512 single 64 0 4226
 check_vector 512 0a     64 1 4739
 
-# Derive the public halves the vectors must verify against
+# Derive the public halves the vectors must verify against, one per path length
 for L in 28 32 48 64; do
   bits=$((L * 8))
-  "${BIN}" printkey --in-fmt raw -k "${V}/seed.bin" -L $bits --public-only --out-fmt rawpub -o "${TMP}/pub-$L.bin"
+  "${BIN}" printkey --in-fmt raw -k "${V}/seed.bin" -L $bits -p 1 --public-only --out-fmt rawpub -o "${TMP}/pub-$L.bin"
   "${BIN}" printkey --in-fmt raw -k "${V}/seed.bin" -L $bits --single --public-only --out-fmt rawpub \
     -o "${TMP}/pub0-$L.bin"
 done
@@ -61,7 +61,7 @@ done
 tr -d '\n' <"${V}/sig-L32-N1.hex" >"${TMP}/v-L32-N1.hex"
 tr -d '\n' <"${V}/sig-L32-N0.hex" >"${TMP}/v-L32-N0.hex"
 
-"${BIN}" verify --key-fmt rawpub -k "${TMP}/pub-32.bin" -m 'sfinx golden vector' --sig-fmt hex \
+"${BIN}" verify --key-fmt rawpub -k "${TMP}/pub-32.bin" -p 1 -m 'sfinx golden vector' --sig-fmt hex \
   -S "${TMP}/v-L32-N1.hex" >/dev/null && ok=1 || ok=0
 tap "${ok}" "committed tree vector verifies" "failed"
 
@@ -82,7 +82,7 @@ patch_byte() {
 
 verify_raw() {
   # verify_raw <pub> <sig>
-  "${BIN}" verify --key-fmt rawpub -k "$1" -m 'sfinx golden vector' -S "$2" >/dev/null 2>&1
+  "${BIN}" verify --key-fmt rawpub -k "$1" -p 1 -m 'sfinx golden vector' -S "$2" >/dev/null 2>&1
 }
 
 head -c 1346 "${TMP}/sig-raw.bin" >"${TMP}/short.bin"

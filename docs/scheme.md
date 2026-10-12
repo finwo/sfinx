@@ -51,25 +51,24 @@ extension, so `seed | prefix` cannot be confused with another prefix.
 - The signer draws `N` bytes from a CSPRNG. This is the randomizer and it is carried in the signature.
 - `path[0]` is the most significant byte (near the root), `path[N-1]` the least significant (near the message).
 - Each path byte navigates one subtree of height `b = 8`, most significant bit first: bit 7 is the decision nearest the subtree root, bit 0 the decision at the leaf.
-- A WOTS key is named by the truncated path that reaches it: a layer-`k` key uses `path[0..k-1]`.
+- A WOTS key is named by `E4M4(N)` and the truncated path that reaches it: a layer-`k` key uses `E4M4(N) | path[0..k-1]`.
 - `N` must be E4M4-representable, because `E4M4(N)` leads the signature.
 - The library never draws the path. `sfinx_tree_sign` takes `path` as an argument, and `sfinx_random_bytes` is a helper the caller uses.
 
 ## WOTS
 
-One WOTS key signs one `L`-byte value. It is derived from the seed and the
-truncated path that reaches it.
+One WOTS key signs one `L`-byte value, derived from the seed, the path length
+and the truncated path that reaches it.
 
 Pre-image, `c * L = (L + 2) * L` bytes:
 
 ```
-stream = SHAKE256(seed | path[0..k-1])              for a layer-k key
+stream = SHAKE256(seed | E4M4(N) | path[0..k-1])    for a layer-k key
 pre[i] = stream[i*L .. i*L + L-1]      for i in 0..c-1
 ```
 
-The layer-0 key (the `N = 0` case) has an empty prefix, so its stream is
-`SHAKE256(seed)`. There is no layer byte, because the truncation length already
-encodes the depth.
+- `E4M4(N)` is at a fixed offset and the prefix length gives `k`, so the key is a bottom key iff `k = N` and interior otherwise.
+- `N = 0` is single mode: empty prefix, `stream = SHAKE256(seed)`.
 
 Digits, from the `L`-byte `value`:
 
@@ -107,12 +106,11 @@ public key. The parent hash is keyed by the parent's position:
 parent = H(bitlen (1) | mask (1) | prefix (k) | left (L) | right (L))
 ```
 
-- `prefix` is the byte-aligned path prefix above the parent.
+- For a node at depth `8k + d`, `prefix` is `E4M4(N) | path[0..k-1]` and `bitlen` is `d`.
 - `bitlen` is 0..8, the number of sub-byte bits in the position. `mask` holds those bits in its top `bitlen` positions with the low `8 - bitlen` bits zeroed, so a prefix has one encoding.
-- For a node at depth `8k + d`, `prefix` is `path[0..k-1]` and `bitlen` is `d`.
 - `left` is the child reached by a 0 bit, `right` the child reached by a 1 bit.
 - Keying by position is what moves the tree from collision resistance to second-preimage resistance.
-- A leaf is `H(ends)` over the `c` chain ends, and a parent is keyed by position. The two input shapes differ, so a leaf hash cannot pass as a parent hash.
+- Leaf and parent inputs coincide in length at `L*L - 2` bytes. The verifier's walk is fixed by `N` and the subtree height, so a leaf is never read as a parent.
 
 ## Tree structure
 
@@ -120,7 +118,7 @@ parent = H(bitlen (1) | mask (1) | prefix (k) | left (L) | right (L))
 - `R_k` is the root of subtree `k`. `R_0` is the public key. `R_N := org`.
 - WOTS at layer `k` signs `R_k`, so `k = N` signs `org` and `1 <= k <= N-1` signs `R_k`.
 - `R_{k-1}` is the WOTS pubkey at layer `k` hashed up subtree `k-1` with its `b` neighbours. At `k = 1` that is the public key.
-- `N >= 1`: the public key is `R_0`, the top subtree root, with no WOTS above it. This matches SPHINCS+. `R_0` depends only on the seed and `L`, never on `N`, so one keypair verifies any `N >= 1`.
+- `N >= 1`: the public key is `R_0`, the top subtree root, with no WOTS above it, matching SPHINCS+. `R_0` depends on the seed, `L` and `N`: one public key per length.
 - `N = 0`: no subtrees and no path. The public key is the layer-0 WOTS pubkey over `SHAKE256(seed)`, and that key signs `org = H(message)`.
 
 ## org
@@ -192,7 +190,7 @@ With `c = L + 2`, at the default `L = 32` (`c = 34`):
 A sketch, not reference code.
 
 ```c
-// A one-time key is named by the truncated path that reaches it.
+// A key is named E4M4(N) | path[0..k-1] for a layer-k key.
 pre_image(seed, prefix) = SHAKE256(seed | prefix, c * L)   // c = L + 2
 
 // L message digits, then the 2 checksum digits.
@@ -229,7 +227,7 @@ tree_sign(seed, message, N):
         return out
 
     for k = N down to 1:
-        out   += single_sign(seed, path[0..k-1], value)  // the value from below
+        out   += single_sign(seed, E4M4(N) | path[0..k-1], value)
         out   += auth(subtree = k-1, path)               // 8 neighbours, LSB first
         value  = root(subtree = k-1, path)               // what the next round signs
 

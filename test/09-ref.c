@@ -15,13 +15,18 @@ static const uint8_t PATH2[2] = {0x0a, 0x1b};
 
 static void run_tree(int bits, sfinx_hash hash, size_t len, const uint8_t *path, size_t path_len) {
   uint8_t lib_pub[SFINX_HASH_LEN_MAX];
+  uint8_t ref_pub[SFINX_HASH_LEN_MAX];
   uint8_t lib_sig[16384];
   uint8_t ref_sig[16384];
   uint8_t tamper[16384];
   size_t  n = sfinx_signature_len(hash, path_len);
   char    label[96];
 
-  sfinx_tree_public_key(hash, SEED, sizeof(SEED), lib_pub, sizeof(lib_pub), NULL);
+  sfinx_tree_public_key(hash, SEED, sizeof(SEED), path_len, lib_pub, sizeof(lib_pub), NULL);
+  ref_tree_pub(bits, SEED, sizeof(SEED), path_len, ref_pub);
+  snprintf(label, sizeof(label), "L%zu N%zu tree pub matches reference", len, path_len);
+  tap(memcmp(lib_pub, ref_pub, len) == 0, label, "differs");
+
   sfinx_tree_sign(hash, SEED, sizeof(SEED), path, path_len, (const uint8_t *)MSG, MSG_LEN, lib_sig, sizeof(lib_sig),
                   NULL);
   ref_tree_sign(bits, SEED, sizeof(SEED), path, path_len, (const uint8_t *)MSG, MSG_LEN, ref_sig);
@@ -64,11 +69,6 @@ static void run_bits(int bits) {
   sfinx_single_public_key(hash, SEED, sizeof(SEED), lib_pub, sizeof(lib_pub), NULL);
   ref_single_pub(bits, SEED, sizeof(SEED), ref_pub);
   snprintf(label, sizeof(label), "L%zu single pub matches reference", len);
-  tap(memcmp(lib_pub, ref_pub, len) == 0, label, "differs");
-
-  sfinx_tree_public_key(hash, SEED, sizeof(SEED), lib_pub, sizeof(lib_pub), NULL);
-  ref_tree_pub(bits, SEED, sizeof(SEED), ref_pub);
-  snprintf(label, sizeof(label), "L%zu tree pub matches reference", len);
   tap(memcmp(lib_pub, ref_pub, len) == 0, label, "differs");
 
   n = sfinx_signature_len(hash, 0);

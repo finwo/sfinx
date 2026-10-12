@@ -20,11 +20,11 @@ else
 fi
 
 bad=$(grep -E '^[[:space:]]*#include' "${ROOT}/src/sfinx.h" |
-  grep -vE '^[[:space:]]*#include[[:space:]]+<(stddef|stdint)\.h>' || true)
+  grep -vE '^[[:space:]]*#include[[:space:]]+<(stddef|stdint|sys/types)\.h>' || true)
 if [ -z "${bad}" ]; then
-  tap 1 "sfinx.h includes only stddef and stdint" ""
+  tap 1 "sfinx.h includes only stddef, stdint and sys/types" ""
 else
-  tap 0 "sfinx.h includes only stddef and stdint" "${bad}"
+  tap 0 "sfinx.h includes only stddef, stdint and sys/types" "${bad}"
 fi
 
 if [ ! -f "${HASH_FIRST}" ]; then
@@ -103,7 +103,7 @@ int main(void) {
   sfinx_key            reread;
   sfinx_status         status;
 
-  if (sfinx_tree_public_key(SFINX_HASH_256, seed, sizeof(seed), pub, sizeof(pub), &pub_len) != SFINX_OK) {
+  if (sfinx_tree_public_key(SFINX_HASH_256, seed, sizeof(seed), sizeof(path), pub, sizeof(pub), &pub_len) != SFINX_OK) {
     return fail("tree_public_key");
   }
   if (sfinx_tree_sign(SFINX_HASH_256, seed, sizeof(seed), path, sizeof(path), msg, msg_len, sig, sizeof(sig),
@@ -124,6 +124,7 @@ int main(void) {
   if (status != SFINX_OK) {
     return fail("decode raw");
   }
+  key.path_len = sizeof(path);
   if (sfinx_key_derive(&key) != SFINX_OK) {
     return fail("derive");
   }
