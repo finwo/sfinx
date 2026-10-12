@@ -3,24 +3,26 @@ CFLAGS ?= -Wall -Wextra -O2
 CFLAGS += -I.. -I../src -I../lib/.dep/include
 CFLAGS += -pthread
 
+include ../lib/.dep/config.mk
+
 OUT := ../build/test
 SRCS := $(filter-out _tap.c bench.c,$(wildcard *.c))
 TESTS := $(patsubst %.c,%,$(SRCS))
 BINS := $(addprefix $(OUT)/,$(TESTS))
 SH := $(filter-out _tap.sh,$(wildcard *.sh))
 
-HASH := ../lib/finwo/keccak-fast/src/keccak-fast.c \
-        $(wildcard ../lib/finwo/keccak-fast/src/backend/*.c)
+KECCAK := ../lib/finwo/keccak-fast/src
+HASH := $(KECCAK)/keccak-fast.c $(wildcard $(KECCAK)/backend/*.c)
 LIB := ../src/keypair.c $(wildcard ../src/fmt/*.c)
 
 .PHONY: all
 all: $(BINS)
 
+../lib/.dep/config.mk:
+	@cd .. && dep install
+
 $(OUT):
 	@mkdir -p $(OUT)
-
-$(HASH):
-	@cd .. && dep install
 
 $(OUT)/09-ref: 09-ref.c ref/sfinx_ref.c ../src/sfinx.c _tap.c $(LIB) $(HASH) | $(OUT)
 	@$(CC) $(CFLAGS) $< $(LIB) $(HASH) -o $@
