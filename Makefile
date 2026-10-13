@@ -2,7 +2,7 @@ TARGET:=$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m)
 
 BIN:=sfinx
 
-SFINX_VERSION?=0.2.0
+SFINX_VERSION?=0.3.0
 export SFINX_VERSION
 
 FIND:=$(shell command -v gfind find)

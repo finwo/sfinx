@@ -55,9 +55,16 @@ keys.
 Each key is a Winternitz one-time signature over an `L`-byte value.
 
 - Pre-image: `SHAKE256(seed | E4M4(N) | path[0..k-1])` for a layer-`k` key, `c * L` bytes, split into `c = L + 2` chains of `L` bytes.
-- Chain `i` signs digit `i` by hashing its pre-image `digit[i]` times.
+- A step is `H(x | kid | i | j)`, where `kid = H(E4M4(N) | path[0..k-1])` truncated, `i` is the chain and `j` the position.
+- Chain `i` signs digit `i` by stepping its pre-image `digit[i]` times.
 - The first `L` digits are the signed value. The last `len2 = 2` digits are the checksum `C = sum(255 - digit[i])`.
-- The pubkey is `H(chain_end[0] | ... | chain_end[c-1])`, where a chain end is the pre-image hashed `w = 256` times.
+- The pubkey is `H(chain_end[0] | ... | chain_end[c-1])`, where a chain end is the pre-image stepped `w = 256` times.
+
+Binding the key, chain and position into every step keeps published chain
+values apart. A plain `H(x)` chain puts every value from every key in one pool,
+where a single precomputation targets all of them at once. The `kid` is public,
+so a verifier recomputes it; it is truncated to keep a step inside one Keccak
+block, which at SHA3-512 leaves only 5 bytes.
 
 The checksum is what stops a chain from being reversed. Increasing any digit
 decreases `C`, and an attacker can only hash forward, so a checksum chain would

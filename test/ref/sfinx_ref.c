@@ -115,43 +115,74 @@ static void ref_digits(int bits, const uint8_t *value, uint8_t *out) {
   out[len + 1] = (uint8_t)(checksum & 0xff);
 }
 
-static void ref_chain(int bits, uint8_t *node, uint32_t steps) {
-  size_t  len = ref_len(bits);
-  uint8_t next[REF_LEN_MAX];
-  for (uint32_t i = 0; i < steps; i++) {
-    ref_sha3(bits, node, len, next);
-    memcpy(node, next, len);
+// Spell the rate out rather than reusing the library's folded constant
+static size_t ref_kid_len(int bits) {
+  size_t len  = ref_len(bits);
+  size_t rate = 200 - 2 * len;
+  size_t room = rate - 1 - len - 2;
+  return len < room ? len : room;
+}
+
+static void ref_kid(int bits, const uint8_t *suffix, size_t suffix_len, uint8_t *out) {
+  uint8_t full[REF_LEN_MAX];
+  size_t  k = ref_kid_len(bits);
+  ref_sha3(bits, suffix, suffix_len, full);
+  for (size_t i = 0; i < k; i++) {
+    out[i] = full[i];
   }
 }
 
-static void ref_pub(int bits, const uint8_t *key, size_t key_len, uint8_t *out) {
+static void ref_chain(int bits, uint8_t *node, const uint8_t *kid, uint8_t index, uint8_t from, uint32_t steps) {
+  size_t  len = ref_len(bits);
+  size_t  k   = ref_kid_len(bits);
+  uint8_t blk[2 * REF_LEN_MAX + 2];
+  for (uint32_t s = 0; s < steps; s++) {
+    size_t at = 0;
+    for (size_t i = 0; i < len; i++) {
+      blk[at++] = node[i];
+    }
+    for (size_t i = 0; i < k; i++) {
+      blk[at++] = kid[i];
+    }
+    blk[at++] = index;
+    blk[at++] = (uint8_t)(from + s);
+    ref_sha3(bits, blk, at, node);
+  }
+}
+
+static void ref_pub(int bits, const uint8_t *key, size_t key_len, size_t seed_len, uint8_t *out) {
   size_t  len = ref_len(bits);
   uint8_t ends[REF_WOTS_MAX];
+  uint8_t kid[REF_LEN_MAX];
   ref_pre(bits, key, key_len, ends);
+  ref_kid(bits, key + seed_len, key_len - seed_len, kid);
   for (size_t i = 0; i < len + 2; i++) {
-    ref_chain(bits, ends + i * len, 256);
+    ref_chain(bits, ends + i * len, kid, (uint8_t)i, 0, 256);
   }
   ref_sha3(bits, ends, (len + 2) * len, out);
 }
 
-static void ref_wots_sign(int bits, const uint8_t *key, size_t key_len, const uint8_t *value, uint8_t *proof) {
+static void ref_wots_sign(int bits, const uint8_t *key, size_t key_len, size_t seed_len, const uint8_t *value,
+                          uint8_t *proof) {
   size_t  len = ref_len(bits);
   uint8_t digits[REF_DIGITS_MAX];
+  uint8_t kid[REF_LEN_MAX];
   ref_pre(bits, key, key_len, proof);
   ref_digits(bits, value, digits);
+  ref_kid(bits, key + seed_len, key_len - seed_len, kid);
   for (size_t i = 0; i < len + 2; i++) {
-    ref_chain(bits, proof + i * len, digits[i]);
+    ref_chain(bits, proof + i * len, kid, (uint8_t)i, 0, digits[i]);
   }
 }
 
-static void ref_wots_rebuild(int bits, const uint8_t *value, const uint8_t *proof, uint8_t *out) {
+static void ref_wots_rebuild(int bits, const uint8_t *value, const uint8_t *proof, const uint8_t *kid, uint8_t *out) {
   size_t  len = ref_len(bits);
   uint8_t digits[REF_DIGITS_MAX];
   uint8_t ends[REF_WOTS_MAX];
   ref_digits(bits, value, digits);
   for (size_t i = 0; i < len + 2; i++) {
     memcpy(ends + i * len, proof + i * len, len);
-    ref_chain(bits, ends + i * len, 256 - digits[i]);
+    ref_chain(bits, ends + i * len, kid, (uint8_t)i, digits[i], 256 - digits[i]);
   }
   ref_sha3(bits, ends, (len + 2) * len, out);
 }
@@ -175,7 +206,7 @@ static void ref_subtree(int bits, const uint8_t *seed, size_t seed_len, const ui
   }
   for (uint32_t i = 0; i < 256; i++) {
     key[key_len - 1] = (uint8_t)i;
-    ref_pub(bits, key, key_len, leaves + (size_t)i * len);
+    ref_pub(bits, key, key_len, seed_len, leaves + (size_t)i * len);
   }
   for (uint8_t depth = 0; depth < 8; depth++) {
     uint8_t bitlen = (uint8_t)(7 - depth);
@@ -210,7 +241,7 @@ static size_t ref_signature_len(int bits, size_t path_len) {
 }
 
 static void ref_single_pub(int bits, const uint8_t *seed, size_t seed_len, uint8_t *out) {
-  ref_pub(bits, seed, seed_len, out);
+  ref_pub(bits, seed, seed_len, seed_len, out);
 }
 
 static void ref_single_sign(int bits, const uint8_t *seed, size_t seed_len, const uint8_t *msg, size_t msg_len,
@@ -220,7 +251,7 @@ static void ref_single_sign(int bits, const uint8_t *seed, size_t seed_len, cons
   ref_sha3(bits, msg, msg_len, org);
   ref_e4m4_encode(0, sig);
   ref_e4m4_encode((uint32_t)len, sig + 1);
-  ref_wots_sign(bits, seed, seed_len, org, sig + 2);
+  ref_wots_sign(bits, seed, seed_len, seed_len, org, sig + 2);
 }
 
 static void ref_tree_pub(int bits, const uint8_t *seed, size_t seed_len, size_t path_len, uint8_t *out) {
@@ -271,7 +302,7 @@ static void ref_tree_sign(int bits, const uint8_t *seed, size_t seed_len, const 
 
   for (size_t k = path_len; k >= 1; k--) {
     ref_subtree(bits, seed, seed_len, npath, k, npath[k], root, auth);
-    ref_wots_sign(bits, key, seed_len + k + 1, value, sig + at);
+    ref_wots_sign(bits, key, seed_len + k + 1, seed_len, value, sig + at);
     at += c * len;
     for (size_t i = 0; i < 8 * len; i++) {
       sig[at++] = auth[i];
@@ -322,8 +353,10 @@ static int ref_verify(const uint8_t *pub, size_t pub_len, const uint8_t *msg, si
   at = 2 + path_len;
 
   if (path_len == 0) {
+    uint8_t kid[REF_LEN_MAX];
     ref_sha3(bits, msg, msg_len, value);
-    ref_wots_rebuild(bits, value, sig + at, leaf);
+    ref_kid(bits, NULL, 0, kid);
+    ref_wots_rebuild(bits, value, sig + at, kid, leaf);
     return memcmp(leaf, pub, len) == 0;
   }
 
@@ -337,7 +370,9 @@ static int ref_verify(const uint8_t *pub, size_t pub_len, const uint8_t *msg, si
   free(joined);
 
   for (size_t k = path_len; k >= 1; k--) {
-    ref_wots_rebuild(bits, value, sig + at, leaf);
+    uint8_t kid[REF_LEN_MAX];
+    ref_kid(bits, sig, k + 1, kid);
+    ref_wots_rebuild(bits, value, sig + at, kid, leaf);
     at += c * len;
     pos = sig[k];
     for (size_t i = 0; i < len; i++) {

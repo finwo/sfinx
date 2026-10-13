@@ -82,21 +82,46 @@ d[L+1] = C & 0xff
 `C` max is `L * 255`, which fits in two bytes for every supported `L` (7,140 at
 `L = 28`, 16,320 at `L = 64`), so `len2 = 2`.
 
+Key id, once per WOTS key, over public data only so the verifier can recompute
+it:
+
+```
+kid = H(E4M4(N) | path[0..k-1])[0 .. K-1]
+K   = min(L, rate - 1 - L - 2)           rate = 200 - 2L
+```
+
+| hash     | rate | L  | K  | block |
+| -------- | ---- | -- | -- | ----- |
+| SHA3-224 |  144 | 28 | 28 |    58 |
+| SHA3-256 |  136 | 32 | 32 |    66 |
+| SHA3-384 |  104 | 48 | 48 |    98 |
+| SHA3-512 |   72 | 64 |  5 |    71 |
+
+`K` is cut so a chain step stays one permutation. SHA3-512 is the tight case:
+rate 72 leaves 5 bytes, so its key ids separate only 40 bits, and two keys
+colliding there share a chain pool again. Single mode has an empty suffix, so
+`kid = H("")`.
+
 Chain and keys:
 
 ```
-chain_i(x, 0) = x
-chain_i(x, k) = H(chain_i(x, k-1))
+chain_i(x, j, 0) = x
+chain_i(x, j, n) = chain_i(H(x | kid | i | j), j+1, n-1)
 
-proof[i] = chain_i(pre[i], d[i])                 sign
-end[i]   = chain_i(pre[i], w)                    pubkey build
+proof[i] = chain_i(pre[i], 0, d[i])              sign
+end[i]   = chain_i(pre[i], 0, w)                 pubkey build
 pubkey   = H(end[0] | end[1] | ... | end[c-1])
 ```
 
+Every step is bound to its key, its chain and its position: `i` is `0..c-1` and
+`j` is `0..w-1`, both one byte. Without that binding every published chain
+value across every key sits in one pool, and one precomputation targets all of
+them at once.
+
 Verify a proof against a value: recompute the digits from the value, then
-`end[i] = chain_i(proof[i], w - d[i])`, then the pubkey hash. An attacker can
-only hash forward, so raising any `d[i]` lowers `C`, which forces a checksum
-chain backward, which needs a preimage.
+`end[i] = chain_i(proof[i], d[i], w - d[i])`, then the pubkey hash. An attacker
+can only hash forward, so raising any `d[i]` lowers `C`, which forces a
+checksum chain backward, which needs a preimage.
 
 ## Merkle subtree
 
@@ -203,14 +228,20 @@ parent(bitlen, mask, prefix, left, right) =
     H(bitlen | mask | prefix | left | right)
 
 // WOTS
+chain(x, kid, i, from, steps):
+    for j = from to from + steps - 1:
+        x = H(x | kid | i | j)
+    return x
+
 single_sign(seed, prefix, value):
     pre = pre_image(seed, prefix)
+    kid = H(prefix)[0..K-1]
     d   = digits(value)
-    return [ pre[i] hashed d[i] times, for i in 0..c-1 ]
+    return [ chain(pre[i], kid, i, 0, d[i]), for i in 0..c-1 ]
 
-single_pubkey(proof, value):
+single_pubkey(proof, kid, value):
     d    = digits(value)
-    ends = [ proof[i] hashed (w - d[i]) times, for i in 0..c-1 ]
+    ends = [ chain(proof[i], kid, i, d[i], w - d[i]), for i in 0..c-1 ]
     return H(ends[0] | ... | ends[c-1])
 ```
 
@@ -244,12 +275,13 @@ verify(pubkey, message, sig):
     L    = E4M4_decode(sig)
 
     if N == 0:
-        return single_pubkey(read_proof(), H(message)) == pubkey
+        return single_pubkey(read_proof(), H(""), H(message)) == pubkey
 
     value = H(path | message)
 
     for k = N down to 1:
-        pub = single_pubkey(read_proof(), value)     // proof for layer k
+        kid = H(E4M4(N) | path[0..k-1])[0..K-1]
+        pub = single_pubkey(read_proof(), kid, value)  // proof for layer k
         if k == 1:
             return hash_up(pub, read_auth()) == pubkey   // root of subtree 0
         value = hash_up(pub, read_auth())            // root of subtree k-1

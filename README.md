@@ -110,12 +110,17 @@ Benchmark
 ```sh
 make bench
 make bench BENCH_ARGS='-L 512 -p 8 -n 5'
+make --directory test bench-chain
 ```
 
 This builds `test/bench.c` both threaded and sequential, then times key
 derivation, signing and verification for both the tree and the single key. `-L`
 sets the hash size (default 256), `-p` the path length in bytes (default 32) and
-`-n` the repetitions, of which the best is reported (default 3).
+`-n` the repetitions, of which the best is reported (default 3). `bench-chain`
+times the WOTS chains alone, per backend.
+
+Measured numbers across a few machines are in
+[docs/bench.md](docs/bench.md).
 
 Testing
 -------
@@ -130,6 +135,7 @@ Docs
 - [docs/scheme.md](docs/scheme.md): the precise scheme, formulas and pseudocode
 - [docs/cli.md](docs/cli.md): the command reference and the file formats
 - [docs/api.md](docs/api.md): the C API, generated from `src/sfinx.h`
+- [docs/bench.md](docs/bench.md): measured throughput per machine and backend
 
 License
 -------

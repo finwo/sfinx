@@ -10,7 +10,7 @@ endif
 include ../lib/.dep/config.mk
 
 OUT := ../build/test
-SRCS := $(filter-out _tap.c bench.c,$(wildcard *.c))
+SRCS := $(filter-out _tap.c bench.c bench-chain.c,$(wildcard *.c))
 TESTS := $(patsubst %.c,%,$(SRCS))
 BINS := $(addprefix $(OUT)/,$(TESTS))
 SH := $(filter-out _tap.sh,$(wildcard *.sh))
@@ -45,10 +45,18 @@ $(OUT)/bench-seq: CFLAGS := $(filter-out -pthread,$(CFLAGS))
 $(OUT)/bench-seq: bench.c ../src/sfinx.c $(HASH) | $(OUT)
 	@$(CC) $(CFLAGS) bench.c ../src/sfinx.c $(HASH) -o $@
 
+$(OUT)/bench-chain: CFLAGS += -I$(KECCAK)
+$(OUT)/bench-chain: bench-chain.c ../src/sfinx.c $(LIB) $(HASH) | $(OUT)
+	@$(CC) $(CFLAGS) bench-chain.c $(LIB) $(HASH) -o $@
+
 .PHONY: bench
 bench: $(OUT)/bench $(OUT)/bench-seq
 	@$(OUT)/bench $(BENCH_ARGS)
 	@$(OUT)/bench-seq $(BENCH_ARGS)
+
+.PHONY: bench-chain
+bench-chain: $(OUT)/bench-chain
+	@$(OUT)/bench-chain $(BENCH_ARGS)
 
 .PHONY: run
 run: all

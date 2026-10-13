@@ -101,6 +101,37 @@ static inline sfinx_hash _sfinx_hash_from_len(size_t len) {
   }
   return 0;
 }
+
+#define SFINX_KID_ROOM(L)  (197 - 3 * (L))
+#define SFINX_KID_LEN(L)   ((L) < SFINX_KID_ROOM(L) ? (L) : SFINX_KID_ROOM(L))
+#define SFINX_CHAIN_FIT(L) ((L) + SFINX_KID_LEN(L) + 2 <= (200 - 2 * (L)) - 1)
+
+_Static_assert(SFINX_CHAIN_FIT(28), "SHA3-224 chain step is not one permutation");
+_Static_assert(SFINX_CHAIN_FIT(32), "SHA3-256 chain step is not one permutation");
+_Static_assert(SFINX_CHAIN_FIT(48), "SHA3-384 chain step is not one permutation");
+_Static_assert(SFINX_CHAIN_FIT(64), "SHA3-512 chain step is not one permutation");
+
+static inline size_t _sfinx_kid_len(sfinx_hash hash) {
+  size_t len = sfinx_hash_len(hash);
+  return SFINX_KID_LEN(len);
+}
+
+static inline void _sfinx_kid(sfinx_hash hash, const uint8_t *suffix, size_t suffix_len, uint8_t *out) {
+  uint8_t full[SFINX_HASH_LEN_MAX];
+  _sfinx_hash(hash, suffix, suffix_len, full);
+  memcpy(out, full, _sfinx_kid_len(hash));
+}
+
+static inline void _sfinx_chain_batch(sfinx_hash hash, size_t count, uint8_t *x, const uint8_t *tail, size_t tail_len,
+                                      uint8_t from, uint32_t steps) {
+  size_t len = sfinx_hash_len(hash);
+  switch (hash) {
+    case SFINX_HASH_224: kf_sha3_224_chain(count, x, len, tail, tail_len, 1, from, steps); break;
+    case SFINX_HASH_256: kf_sha3_256_chain(count, x, len, tail, tail_len, 1, from, steps); break;
+    case SFINX_HASH_384: kf_sha3_384_chain(count, x, len, tail, tail_len, 1, from, steps); break;
+    case SFINX_HASH_512: kf_sha3_512_chain(count, x, len, tail, tail_len, 1, from, steps); break;
+  }
+}
 // }}}
 
 // WOTS {{{
@@ -115,6 +146,7 @@ static inline sfinx_hash _sfinx_hash_from_len(size_t len) {
 
 #define SFINX_WOTS_BYTES_MAX  ((SFINX_HASH_LEN_MAX + 2) * SFINX_HASH_LEN_MAX)
 #define SFINX_WOTS_DIGITS_MAX (SFINX_HASH_LEN_MAX + 2)
+#define SFINX_WOTS_TAIL_MAX   ((SFINX_HASH_LEN_MAX + 2) * (SFINX_HASH_LEN_MAX + 1))
 
 // Cap on the seed-sized key staging buffer, so a large seed cannot force 256 copies at once
 #ifndef SFINX_BATCH_KEY_BUDGET
@@ -137,42 +169,57 @@ static inline void _sfinx_wots_digits(sfinx_hash hash, const uint8_t *value, uin
   out[len + 1] = (uint8_t)checksum;
 }
 
-static inline void _sfinx_wots_chain(sfinx_hash hash, uint8_t *node, uint32_t steps) {
-  uint8_t next[SFINX_HASH_LEN_MAX];
-  size_t  len = sfinx_hash_len(hash);
-  for (uint32_t i = 0; i < steps; i++) {
-    _sfinx_hash(hash, node, len, next);
-    memcpy(node, next, len);
+static inline void _sfinx_wots_tails(sfinx_hash hash, const uint8_t *kid, uint8_t *out) {
+  size_t len = sfinx_hash_len(hash);
+  size_t k   = _sfinx_kid_len(hash);
+  for (size_t i = 0; i < len + 2; i++) {
+    memcpy(out + i * (k + 1), kid, k);
+    out[i * (k + 1) + k] = (uint8_t)i;
   }
 }
 
-static inline void _sfinx_wots_pubkey(sfinx_hash hash, const uint8_t *key, size_t key_len, uint8_t *pubkey_out) {
+static inline void _sfinx_wots_chain(sfinx_hash hash, uint8_t *node, const uint8_t *kid, uint8_t index, uint8_t from,
+                                     uint32_t steps) {
+  uint8_t tail[SFINX_HASH_LEN_MAX + 1];
+  size_t  k = _sfinx_kid_len(hash);
+  memcpy(tail, kid, k);
+  tail[k] = index;
+  _sfinx_chain_batch(hash, 1, node, tail, k + 1, from, steps);
+}
+
+static inline void _sfinx_wots_pubkey(sfinx_hash hash, const uint8_t *key, size_t key_len, size_t seed_len,
+                                      uint8_t *pubkey_out) {
   size_t  len   = sfinx_hash_len(hash);
   size_t  count = len + 2;
+  size_t  k     = _sfinx_kid_len(hash);
   uint8_t ends[SFINX_WOTS_BYTES_MAX];
+  uint8_t kid[SFINX_HASH_LEN_MAX];
+  uint8_t tails[SFINX_WOTS_TAIL_MAX];
   _sfinx_wots_preimage(hash, key, key_len, ends);
-  for (uint32_t step = 0; step < 256u; step++) {
-    _sfinx_hash_batch(hash, count, ends, len, ends, len);
-  }
+  _sfinx_kid(hash, key + seed_len, key_len - seed_len, kid);
+  _sfinx_wots_tails(hash, kid, tails);
+  _sfinx_chain_batch(hash, count, ends, tails, k + 1, 0, 256);
   _sfinx_hash(hash, ends, count * len, pubkey_out);
 }
 
-static inline sfinx_status _sfinx_wots_sign(sfinx_hash hash, const uint8_t *key, size_t key_len, const uint8_t *value,
-                                            size_t value_len, uint8_t *proof_out) {
+static inline sfinx_status _sfinx_wots_sign(sfinx_hash hash, const uint8_t *key, size_t key_len, size_t seed_len,
+                                            const uint8_t *value, size_t value_len, uint8_t *proof_out) {
   size_t  len = sfinx_hash_len(hash);
   uint8_t digits[SFINX_WOTS_DIGITS_MAX];
+  uint8_t kid[SFINX_HASH_LEN_MAX];
   if (len == 0 || value_len != len) {
     return SFINX_ERR_ARGS;
   }
   _sfinx_wots_preimage(hash, key, key_len, proof_out);
   _sfinx_wots_digits(hash, value, digits);
+  _sfinx_kid(hash, key + seed_len, key_len - seed_len, kid);
   for (size_t i = 0; i < len + 2; i++) {
-    _sfinx_wots_chain(hash, proof_out + i * len, digits[i]);
+    _sfinx_wots_chain(hash, proof_out + i * len, kid, (uint8_t)i, 0, digits[i]);
   }
   return SFINX_OK;
 }
 
-static inline void _sfinx_wots_rebuild(sfinx_hash hash, const uint8_t *value, const uint8_t *proof,
+static inline void _sfinx_wots_rebuild(sfinx_hash hash, const uint8_t *value, const uint8_t *proof, const uint8_t *kid,
                                        uint8_t *pubkey_out) {
   size_t  len = sfinx_hash_len(hash);
   uint8_t digits[SFINX_WOTS_DIGITS_MAX];
@@ -181,16 +228,16 @@ static inline void _sfinx_wots_rebuild(sfinx_hash hash, const uint8_t *value, co
   _sfinx_wots_digits(hash, value, digits);
   for (size_t i = 0; i < len + 2; i++) {
     memcpy(node, proof + i * len, len);
-    _sfinx_wots_chain(hash, node, 256 - digits[i]);
+    _sfinx_wots_chain(hash, node, kid, (uint8_t)i, digits[i], 256 - digits[i]);
     memcpy(ends + i * len, node, len);
   }
   _sfinx_hash(hash, ends, (len + 2) * len, pubkey_out);
 }
 
-static inline int _sfinx_wots_verify(sfinx_hash hash, const uint8_t *pubkey, const uint8_t *value,
-                                     const uint8_t *proof) {
+static inline int _sfinx_wots_verify(sfinx_hash hash, const uint8_t *pubkey, const uint8_t *value, const uint8_t *proof,
+                                     const uint8_t *kid) {
   uint8_t want[SFINX_HASH_LEN_MAX];
-  _sfinx_wots_rebuild(hash, value, proof, want);
+  _sfinx_wots_rebuild(hash, value, proof, kid, want);
   return memcmp(want, pubkey, sfinx_hash_len(hash)) == 0;
 }
 // }}}
@@ -448,12 +495,14 @@ static inline void _sfinx_merkle_parent(sfinx_hash hash, uint8_t bitlen, uint8_t
 
 static inline void _sfinx_subtree_leaves(sfinx_hash hash, const uint8_t *seed, size_t seed_len, const uint8_t *prefix,
                                          size_t prefix_len, size_t begin, size_t end, uint8_t *ends, uint8_t *nodes,
-                                         uint8_t *keybuf) {
-  size_t len     = sfinx_hash_len(hash);
-  size_t c       = len + 2;
-  size_t key_len = seed_len + prefix_len + 1;
-  size_t chunk   = SFINX_BATCH_KEY_BUDGET / key_len;
-  size_t n       = end - begin;
+                                         uint8_t *tails, uint8_t *keybuf) {
+  size_t len      = sfinx_hash_len(hash);
+  size_t c        = len + 2;
+  size_t k        = _sfinx_kid_len(hash);
+  size_t key_len  = seed_len + prefix_len + 1;
+  size_t tail_len = k + 1;
+  size_t chunk    = SFINX_BATCH_KEY_BUDGET / key_len;
+  size_t n        = end - begin;
 
   if (chunk == 0) {
     chunk = 1;
@@ -472,10 +521,14 @@ static inline void _sfinx_subtree_leaves(sfinx_hash hash, const uint8_t *seed, s
       key[key_len - 1] = (uint8_t)(begin + base + i);
     }
     _sfinx_shake256_batch(m, keybuf, key_len, ends + (begin + base) * c * len, c * len);
+    for (size_t i = 0; i < m; i++) {
+      uint8_t  kid[SFINX_HASH_LEN_MAX];
+      uint8_t *key = keybuf + i * key_len;
+      _sfinx_kid(hash, key + seed_len, prefix_len + 1, kid);
+      _sfinx_wots_tails(hash, kid, tails + (begin + base + i) * c * tail_len);
+    }
   }
-  for (uint32_t step = 0; step < 256u; step++) {
-    _sfinx_hash_batch(hash, n * c, ends + begin * c * len, len, ends + begin * c * len, len);
-  }
+  _sfinx_chain_batch(hash, n * c, ends + begin * c * len, tails + begin * c * tail_len, tail_len, 0, 256);
   _sfinx_hash_batch(hash, n, ends + begin * c * len, c * len, nodes + begin * len, len);
 }
 
@@ -489,6 +542,7 @@ typedef struct {
   size_t         count;
   uint8_t       *ends;
   uint8_t       *nodes;
+  uint8_t       *tails;
 } _sfinx_subtree_ctx;
 
 static void _sfinx_subtree_job(void *vctx, size_t index, void *scratch) {
@@ -500,22 +554,29 @@ static void _sfinx_subtree_job(void *vctx, size_t index, void *scratch) {
     end = ctx->count;
   }
   _sfinx_subtree_leaves(ctx->hash, ctx->seed, ctx->seed_len, ctx->prefix, ctx->prefix_len, begin, end, ctx->ends,
-                        ctx->nodes, scratch);
+                        ctx->nodes, ctx->tails, scratch);
 }
 
 static inline int _sfinx_subtree_build(_sfinx_pool *pool, sfinx_hash hash, const uint8_t *seed, size_t seed_len,
                                        const uint8_t *prefix, size_t prefix_len, uint8_t leaf_index, uint8_t *root_out,
                                        uint8_t *auth_out) {
-  size_t   len     = sfinx_hash_len(hash);
-  size_t   c       = len + 2;
-  size_t   key_len = seed_len + prefix_len + 1;
-  size_t   count   = 256;
-  size_t   pos     = leaf_index;
+  size_t   len      = sfinx_hash_len(hash);
+  size_t   c        = len + 2;
+  size_t   key_len  = seed_len + prefix_len + 1;
+  size_t   tail_len = _sfinx_kid_len(hash) + 1;
+  size_t   count    = 256;
+  size_t   pos      = leaf_index;
   uint8_t  nodes[256 * SFINX_HASH_LEN_MAX];
   uint8_t *ends;
+  uint8_t *tails;
 
   ends = malloc(count * c * len);
   if (!ends) {
+    return 0;
+  }
+  tails = malloc(count * c * tail_len);
+  if (!tails) {
+    free(ends);
     return 0;
   }
   if (pool) {
@@ -529,6 +590,7 @@ static inline int _sfinx_subtree_build(_sfinx_pool *pool, sfinx_hash hash, const
         .count      = count,
         .ends       = ends,
         .nodes      = nodes,
+        .tails      = tails,
     };
     size_t jobs;
     if (ctx.chunk == 0) {
@@ -547,10 +609,11 @@ static inline int _sfinx_subtree_build(_sfinx_pool *pool, sfinx_hash hash, const
     }
     keybuf = malloc(chunk * key_len);
     if (!keybuf) {
+      free(tails);
       free(ends);
       return 0;
     }
-    _sfinx_subtree_leaves(hash, seed, seed_len, prefix, prefix_len, 0, count, ends, nodes, keybuf);
+    _sfinx_subtree_leaves(hash, seed, seed_len, prefix, prefix_len, 0, count, ends, nodes, tails, keybuf);
     free(keybuf);
   }
   for (size_t bitlen = 8; bitlen-- > 0;) {
@@ -565,6 +628,7 @@ static inline int _sfinx_subtree_build(_sfinx_pool *pool, sfinx_hash hash, const
     pos >>= 1;
   }
   memcpy(root_out, nodes, len);
+  free(tails);
   free(ends);
   return 1;
 }
@@ -606,7 +670,7 @@ sfinx_status sfinx_single_public_key(sfinx_hash hash, const uint8_t *seed, size_
   if (!pubkey_out || pubkey_cap < len) {
     return SFINX_ERR_NOSPACE;
   }
-  _sfinx_wots_pubkey(hash, seed, seed_len, pubkey_out);
+  _sfinx_wots_pubkey(hash, seed, seed_len, seed_len, pubkey_out);
   if (pubkey_len_out) {
     *pubkey_len_out = len;
   }
@@ -627,7 +691,7 @@ sfinx_status sfinx_single_sign(sfinx_hash hash, const uint8_t *seed, size_t seed
   _sfinx_hash(hash, msg, msg_len, org);
   _sfinx_e4m4_encode(0, sig);
   _sfinx_e4m4_encode((uint32_t)len, sig + 1);
-  if (_sfinx_wots_sign(hash, seed, seed_len, org, len, sig + 2) != SFINX_OK) {
+  if (_sfinx_wots_sign(hash, seed, seed_len, seed_len, org, len, sig + 2) != SFINX_OK) {
     return SFINX_ERR_ARGS;
   }
   if (sig_len_out) {
@@ -718,7 +782,7 @@ sfinx_status sfinx_tree_sign(sfinx_hash hash, const uint8_t *seed, size_t seed_l
       free(key);
       return SFINX_ERR_NOSPACE;
     }
-    if (_sfinx_wots_sign(hash, key, seed_len + k + 1, value, len, sig + at) != SFINX_OK) {
+    if (_sfinx_wots_sign(hash, key, seed_len + k + 1, seed_len, value, len, sig + at) != SFINX_OK) {
       _sfinx_pool_destroy(pool);
       free(key);
       return SFINX_ERR_ARGS;
@@ -756,6 +820,7 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   uint8_t        value[SFINX_HASH_LEN_MAX];
   uint8_t        leaf[SFINX_HASH_LEN_MAX];
   uint8_t        root[SFINX_HASH_LEN_MAX];
+  uint8_t        kid[SFINX_HASH_LEN_MAX];
   const uint8_t *path;
   uint8_t       *joined;
 
@@ -777,7 +842,8 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   c = len + 2;
   if (path_len == 0) {
     _sfinx_hash(hash, msg, msg_len, org);
-    return _sfinx_wots_verify(hash, pubkey, org, sig + at) ? SFINX_OK : SFINX_ERR_VERIFY;
+    _sfinx_kid(hash, NULL, 0, kid);
+    return _sfinx_wots_verify(hash, pubkey, org, sig + at, kid) ? SFINX_OK : SFINX_ERR_VERIFY;
   }
   joined = malloc(path_len + msg_len);
   if (!joined) {
@@ -789,7 +855,8 @@ sfinx_status sfinx_verify(const uint8_t *pubkey, size_t pubkey_len, const uint8_
   free(joined);
   memcpy(value, org, len);
   for (size_t k = path_len; k >= 1; k--) {
-    _sfinx_wots_rebuild(hash, value, sig + at, leaf);
+    _sfinx_kid(hash, sig, k + 1, kid);
+    _sfinx_wots_rebuild(hash, value, sig + at, kid, leaf);
     at += c * len;
     _sfinx_subtree_verify(hash, sig, k, leaf, sig[k], sig + at, root);
     at += 8 * len;

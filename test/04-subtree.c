@@ -28,7 +28,7 @@ int main(void) {
   memcpy(key, seed, seed_len);
   memcpy(key + seed_len, prefix, 3);
   key[seed_len + 3] = idx;
-  _sfinx_wots_pubkey(SFINX_HASH_256, key, seed_len + 4, leaf);
+  _sfinx_wots_pubkey(SFINX_HASH_256, key, seed_len + 4, seed_len, leaf);
   _sfinx_subtree_verify(SFINX_HASH_256, prefix, 3, leaf, idx, auth, built);
   tap(memcmp(built, root, len) == 0, "auth path rebuilds the subtree root", "root differs");
 
@@ -50,7 +50,7 @@ int main(void) {
     memcpy(key, seed, seed_len);
     memcpy(key + seed_len, prefix, 3);
     key[seed_len + 3] = (uint8_t)i;
-    _sfinx_wots_pubkey(SFINX_HASH_256, key, seed_len + 4, nodes + i * len);
+    _sfinx_wots_pubkey(SFINX_HASH_256, key, seed_len + 4, seed_len, nodes + i * len);
   }
   count = 256;
   for (size_t bitlen = 8; bitlen-- > 0;) {
@@ -79,7 +79,7 @@ int main(void) {
       memcpy(mkey, seed, seed_len);
       memcpy(mkey + seed_len, prefix, 3);
       mkey[seed_len + 3] = (uint8_t)i;
-      _sfinx_wots_pubkey(h, mkey, seed_len + 4, mnodes + i * l);
+      _sfinx_wots_pubkey(h, mkey, seed_len + 4, seed_len, mnodes + i * l);
     }
     for (size_t bitlen = 8; bitlen-- > 0;) {
       cnt /= 2;
