@@ -110,7 +110,7 @@ parent = H(bitlen (1) | mask (1) | prefix (k) | left (L) | right (L))
 - `bitlen` is 0..8, the number of sub-byte bits in the position. `mask` holds those bits in its top `bitlen` positions with the low `8 - bitlen` bits zeroed, so a prefix has one encoding.
 - `left` is the child reached by a 0 bit, `right` the child reached by a 1 bit.
 - Keying by position is what moves the tree from collision resistance to second-preimage resistance.
-- Leaf and parent inputs coincide in length at `L*L - 2` bytes. The verifier's walk is fixed by `N` and the subtree height, so a leaf is never read as a parent.
+- A leaf input is `c * L` bytes and a parent input `2 + k + 2L`, so the two coincide at `L*L + 2L` bytes, where the prefix is `k = L*L - 2`. The verifier's walk is fixed by `N` and the subtree height, so a leaf is never read as a parent.
 
 ## Tree structure
 

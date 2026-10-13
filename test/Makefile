@@ -3,6 +3,10 @@ CFLAGS ?= -Wall -Wextra -O2
 CFLAGS += -I.. -I../src -I../lib/.dep/include
 CFLAGS += -pthread
 
+ifneq ($(SFINX_VERSION),)
+CFLAGS += -DSFINX_VERSION='"$(SFINX_VERSION)"'
+endif
+
 include ../lib/.dep/config.mk
 
 OUT := ../build/test

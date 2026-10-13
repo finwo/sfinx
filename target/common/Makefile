@@ -22,6 +22,10 @@ endif
 CFLAGS +=-pthread
 LDFLAGS+=-pthread
 
+ifneq ($(SFINX_VERSION),)
+CFLAGS +=-DSFINX_VERSION='"$(SFINX_VERSION)"'
+endif
+
 INCLUDES:=
 INCLUDES+=-I src
 

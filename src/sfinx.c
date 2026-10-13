@@ -821,8 +821,12 @@ const char *sfinx_strerror(sfinx_status status) {
   return "unknown error";
 }
 
+#ifndef SFINX_VERSION
+#define SFINX_VERSION "n/a-dev"
+#endif
+
 const char *sfinx_version(void) {
-  return "0.1.0";
+  return SFINX_VERSION;
 }
 
 size_t sfinx_signature_len(sfinx_hash hash, size_t path_len) {
