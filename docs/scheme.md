@@ -20,7 +20,7 @@ that reaches it, so the tree is never built or stored.
 | `w`     |         256 | chain length, `1 << 8`, so one digit is one byte                                   |
 | `b`     |           8 | subtree height in bits, so `1 << b = 256` leaves per subtree                       |
 | `N`     |          32 | path length in bytes, E4M4-representable. Default `32`.                            |
-| `layer` |      `1..N` | which WOTS key in the stack; a layer-`k` key is named by the first `k` path bytes  |
+| `layer` |      `1..N` | which WOTS key in the stack; layer-`k` is named by `E4M4(N)` and `k` path bytes    |
 
 - `H` is `SHA3-8*L`, so SHA3-224/256/384/512, and returns `L` bytes.
 - `SHAKE256(x)` is the XOF; the WOTS pre-image asks for `c * L = (L + 2) * L` bytes.
@@ -40,11 +40,12 @@ that reaches it, so the tree is never built or stored.
 ## Node position
 
 A node is named by a path prefix, not a mask. WOTS keys sit at byte-aligned
-depths, so their prefix is a whole number of path bytes. Merkle internals can
-sit at any depth, so their position is `prefix` bytes plus a sub-byte remainder
-carried as `bitlen` (0..8) and `mask` (the partial byte, top `bitlen` bits kept
-and the rest zeroed). Nothing else is zero-padded, because SHA3 has no length
-extension, so `seed | prefix` cannot be confused with another prefix.
+depths, so their prefix is `E4M4(N)` plus a whole number of path bytes. Merkle
+internals can sit at any depth, so their position is `prefix` bytes plus a
+sub-byte remainder carried as `bitlen` (0..8) and `mask` (the partial byte, top
+`bitlen` bits kept and the rest zeroed). Nothing else is zero-padded, because
+SHA3 has no length extension, so `seed | prefix` cannot be confused with another
+prefix.
 
 ## Path
 
@@ -103,14 +104,14 @@ Each subtree is binary with height `b = 8`, so 256 leaves, each leaf a WOTS
 public key. The parent hash is keyed by the parent's position:
 
 ```
-parent = H(bitlen (1) | mask (1) | prefix (k) | left (L) | right (L))
+parent = H(bitlen (1) | mask (1) | prefix (p) | left (L) | right (L))
 ```
 
-- For a node at depth `8k + d`, `prefix` is `E4M4(N) | path[0..k-1]` and `bitlen` is `d`.
+- For a node at depth `8k + d`, `prefix` is `E4M4(N) | path[0..k-1]`, so `p = k + 1`, and `bitlen` is `d`.
 - `bitlen` is 0..8, the number of sub-byte bits in the position. `mask` holds those bits in its top `bitlen` positions with the low `8 - bitlen` bits zeroed, so a prefix has one encoding.
 - `left` is the child reached by a 0 bit, `right` the child reached by a 1 bit.
 - Keying by position is what moves the tree from collision resistance to second-preimage resistance.
-- A leaf input is `c * L` bytes and a parent input `2 + k + 2L`, so the two coincide at `L*L + 2L` bytes, where the prefix is `k = L*L - 2`. The verifier's walk is fixed by `N` and the subtree height, so a leaf is never read as a parent.
+- A leaf input is `c * L` bytes and a parent input `2 + p + 2L`, so the two coincide at `L*L + 2L` bytes, where `p = L*L - 2`. The verifier's walk is fixed by `N` and the subtree height, so a leaf is never read as a parent.
 
 ## Tree structure
 

@@ -21,7 +21,7 @@ This document is the intuition and the vocabulary. The precise formulas are in
 - `b`: bits per subtree (8, one path byte, so 256 leaves).
 - `N`: path length in bytes, E4M4-representable. `N` subtrees and `N` WOTS keys for `N >= 1`.
 - `bitlen`, `mask`: the sub-byte part of a node's position. `bitlen` is the bit count (0..8), `mask` one byte holding those bits in its top `bitlen` positions with the low `8 - bitlen` bits zeroed.
-- `layer`: which WOTS key in the stack, `1..N`. A layer-`k` key is named by the first `k` path bytes.
+- `layer`: which WOTS key in the stack, `1..N`. A layer-`k` key is named by `E4M4(N)` and the first `k` path bytes.
 - `org`: what the bottom WOTS signs, `= H(path | message)`, so the same message on a different path signs a different value. With no path, `org = H(message)`.
 - `E4M4`: the log-ish length byte, 4-bit exponent then 4-bit mantissa. Exponent `0` is the mantissa (0..15); for exponent `E >= 1` the value is `(16 + mantissa) << (E-1)`, so `0x10` is 16, `0x20` is 32, `0x30` is 64, and each exponent step doubles.
 
@@ -73,21 +73,13 @@ Each subtree is a plain binary hash tree, but the hash is keyed by position:
 H(bitlen | mask | prefix | left | right)
 ```
 
-`prefix` is the byte-aligned path prefix above the node. `bitlen` (0..8) and
-`mask` carry the sub-byte remainder, so a node at depth `8k + d` is named by
-`k` path bytes plus `d` bits. `mask` keeps the top `bitlen` bits and zeroes the
-rest, so `0xff` and `0xfc` are the same prefix at `bitlen = 4`. No node hash can
-be replayed at another depth or in another subtree, so the tree rests on
-second-preimage resistance instead of collision resistance. An `L`-byte hash is
-not silently cut in half.
-
-## Reading the path
-
-The path is read one byte at a time, and a node is named by a prefix of it. The
-prefix is truncated at a byte boundary, and the leftover bits travel as `bitlen`
-and `mask`. Only the uncovered bits of the `mask` byte are zeroed, so the prefix
-itself is never padded. SHA3 has no length extension, so `seed | prefix` cannot
-be stretched into another prefix.
+`prefix` is `E4M4(N)` plus the byte-aligned path prefix above the node. `bitlen`
+(0..8) and `mask` carry the sub-byte remainder, so a node at depth `8k + d` is
+named by `k` path bytes plus `d` bits. `mask` keeps the top `bitlen` bits and
+zeroes the rest, so `0xff` and `0xfc` are the same prefix at `bitlen = 4`. The
+prefix itself is never padded. No node hash can be replayed at another depth or
+in another subtree, so the tree rests on second-preimage resistance instead of
+collision resistance. An `L`-byte hash is not silently cut in half.
 
 ## Signing
 
@@ -130,9 +122,8 @@ collision space is 256 bits.
 
 ## No state
 
-sfinx is stateless. There is no counter and no state file. A signature is a
-proof that you can produce the path to a given root, and the virtual tree gives
-a universal keyspace.
+A signature is a proof that you can produce the path to a given root, not a
+record that you did.
 
 ## Cost and parallelism
 
@@ -150,4 +141,4 @@ a universal keyspace.
 Hash chains are independent, so the library runs the 256-leaf subtree build on
 a worker pool when compiled with pthread support, and sequentially when it is
 not. The switch is compile-time only, and the output is identical either way, so
-it is invisible in the signature. The detailed formulas live in `scheme.md`.
+it is invisible in the signature.

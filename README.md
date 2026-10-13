@@ -3,17 +3,16 @@ sfinx
 
 > Stateless hash-based signatures
 
-Signing uses a SPHINCS+-inspired scheme built on hash chains over a merkle tree
-that is never stored. Every key is derived from the seed and the path that
-reaches it, so there is no counter and no state file to keep in sync. The secret
-is a seed, and the public key is a single hash.
+A SPHINCS+-inspired signature scheme. Its only assumption is SHA3, so there is
+no curve or factoring problem for a quantum computer to solve.
 
-The hash size and the tree depth (`-p`) are arguments rather than build options.
-The depth defaults to 32 and sets the signature size. The docs cover changing
-either.
+| at the defaults |              |
+| --------------- | ------------ |
+| Secret          | a seed       |
+| Public key      | 32 bytes     |
+| Signature       | 43,042 bytes |
 
-This project makes use of [dep](https://git.finwo.net/app/dep) to manage its
-dependencies and exports.
+Dependencies and exports are managed with [dep](https://git.finwo.net/app/dep).
 
 Features
 --------

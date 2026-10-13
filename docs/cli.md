@@ -7,7 +7,7 @@
 
 ```
 $ sfinx generate -o demo.key
-$ sfinx sign   -k demo.key -p 32 -m "hello sfinx" -o demo.sig
+$ sfinx sign   -k demo.key -m "hello sfinx" -o demo.sig
 $ sfinx verify -k demo.key -S demo.sig -m "hello sfinx"
 OK
 ```
