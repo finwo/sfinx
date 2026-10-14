@@ -7,6 +7,8 @@
 #include "keccak-fast-internal.h"
 #include "src/sfinx.c"
 
+static kf_hash_fn orig_one[4];
+
 #define KF_CHAIN_PROTO(name) \
   void name(size_t, uint8_t *, size_t, const uint8_t *, size_t, size_t, uint8_t, uint32_t, size_t, uint8_t)
 #define KF_HASH_PROTO(name) int name(uint8_t *, size_t, const uint8_t *, size_t)
@@ -94,6 +96,11 @@ int main(int argc, char **argv) {
   if (reps == 0) {
     reps = 1;
   }
+
+  orig_one[0] = kf_sha3_224;
+  orig_one[1] = kf_sha3_256;
+  orig_one[2] = kf_sha3_384;
+  orig_one[3] = kf_sha3_512;
 
   rows[nr++] = (row){"scalar",
                      kf_scalar_batch,
@@ -186,6 +193,10 @@ int main(int argc, char **argv) {
       kf_chain_kernel   = rows[i].chain;
       kf_chain_kernel12 = rows[i].chain12;
       kf_chain_lanes    = rows[i].lanes;
+      kf_sha3_224       = orig_one[0];
+      kf_sha3_256       = orig_one[1];
+      kf_sha3_384       = orig_one[2];
+      kf_sha3_512       = orig_one[3];
       if (rows[i].one[0] != NULL) {
         kf_sha3_224 = rows[i].one[0];
         kf_sha3_256 = rows[i].one[1];
