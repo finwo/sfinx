@@ -77,28 +77,33 @@ in millions of hashes per second on the 9800X3D. Higher is better.
 - `glue`: the tweak over the batch API, rebuilding records each step
 - `fused`: the chain kernel
 
-| hash     | backend   | plain | glue  | fused |
-| -------- | --------- | ----- | ----- | ----- |
-| SHA3-224 | scalar    |  5.94 |  5.73 |  5.11 |
-| SHA3-224 | avx2 x4   | 11.92 | 10.54 | 13.51 |
-| SHA3-224 | avx512 x8 | 24.44 | 20.36 | 40.10 |
-| SHA3-256 | scalar    |  5.92 |  5.67 |  5.12 |
-| SHA3-256 | avx2 x4   | 11.60 | 10.22 | 13.53 |
-| SHA3-256 | avx512 x8 | 24.05 | 19.73 | 40.44 |
-| SHA3-384 | scalar    |  5.83 |  5.45 |  5.12 |
-| SHA3-384 | avx2 x4   | 10.93 |  9.57 | 13.54 |
-| SHA3-384 | avx512 x8 | 21.63 | 17.13 | 40.24 |
-| SHA3-512 | scalar    |  5.70 |  5.59 |  5.12 |
-| SHA3-512 | avx2 x4   | 10.50 | 10.03 | 13.59 |
-| SHA3-512 | avx512 x8 | 20.24 | 18.76 | 40.91 |
+| hash     | backend    | plain | glue  | fused |
+| -------- | ---------- | ----- | ----- | ----- |
+| SHA3-224 | scalar     |  5.14 |  4.98 |  5.11 |
+| SHA3-224 | scalar+bmi |  5.92 |  5.70 |  5.84 |
+| SHA3-224 | avx2 x4    | 11.81 | 10.77 | 13.43 |
+| SHA3-224 | avx512 x8  | 26.13 | 22.13 | 39.83 |
+| SHA3-256 | scalar     |  5.14 |  4.97 |  5.10 |
+| SHA3-256 | scalar+bmi |  5.91 |  5.66 |  5.86 |
+| SHA3-256 | avx2 x4    | 11.74 | 10.64 | 13.50 |
+| SHA3-256 | avx512 x8  | 25.68 | 21.42 | 40.35 |
+| SHA3-384 | scalar     |  5.11 |  4.83 |  5.13 |
+| SHA3-384 | scalar+bmi |  5.83 |  5.45 |  5.86 |
+| SHA3-384 | avx2 x4    | 11.20 |  9.56 | 13.53 |
+| SHA3-384 | avx512 x8  | 23.99 | 17.35 | 40.21 |
+| SHA3-512 | scalar     |  5.02 |  4.94 |  5.14 |
+| SHA3-512 | scalar+bmi |  5.70 |  5.60 |  5.85 |
+| SHA3-512 | avx2 x4    | 10.92 | 10.50 | 13.59 |
+| SHA3-512 | avx512 x8  | 22.33 | 20.79 | 40.90 |
 
 A chain step is one permutation at every hash size, so the fused kernel holds
-about 40 Mh/s on avx512 from SHA3-224 to SHA3-512 where an untweaked chain
-falls from 24.4 to 20.2. Reaching the chain through the batch API instead costs
+about 40 Mh/s on avx512 from SHA3-224 to SHA3-512, where an untweaked chain
+falls from 26.1 to 22.3. Reaching the chain through the batch API instead costs
 a transpose and a scalar absorb per step, which is the `glue` column.
 
-Scalar has no lanes to fill, so it does not recover the larger block and sits
-about 14% below an untweaked chain.
+The scalar rows have one lane, so the batch API has nothing to overlap and its
+`plain` column lands on the same one-permutation loop as `fused`. `scalar+bmi`
+is the fallback on x86 without AVX, about 15% ahead.
 
 ## Notes
 
